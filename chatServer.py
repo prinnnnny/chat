@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-import socket, select, argparse, sys, ssl, time, curses, os
+import socket, select, argparse, sys, ssl, time, curses, os, traceback
+from client import Client
 
 class ChatServer(object):
 	def __init__(self, port):
@@ -28,6 +29,7 @@ class ChatServer(object):
 			self.listen_thread = threading.Thread(target=self.listener)
 			self.listen_thread.setDaemon(True)
 		except:
+			print(traceback.format_exc())
 			self.screen.addstr(10, 4, "Server failed to start!")
 			self.screen.refresh()
 
@@ -37,6 +39,7 @@ class ChatServer(object):
 			for s in read:
 				if s is self.sock:
 					client, address = s.accept()
+					self.client_screen.addstr(10, 4, "Client connected from %s" % address)
 				else:
 					while True:
 						message = s.recv(1024) #Grab message to be broadcast
@@ -103,8 +106,8 @@ class ChatServer(object):
 				self.screen.refresh()
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
-					self.start()
-					self.screen.adddtr(10, 4, "Server started on port %s" % self.port)
+					self.start(self.port)
+					self.screen.addstr(10, 4, "Server started on port %s" % self.port)
 					self.screen.refresh()
 				elif x == ord('2'):
 					#Place holder to draw clients
@@ -119,10 +122,8 @@ class ChatServer(object):
 					sys.exit()
 
 		except Exception as e:
-			exc_type, exc_obj, exc_tb = sys.exc_info()
-			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-			print(exc_type, fname, exc_tb.tb_lineno)
-			curses.endwin()
+			print(traceback.format_exc())
+			#curses.endwin()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
