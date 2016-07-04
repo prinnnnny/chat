@@ -5,51 +5,51 @@ from client import Client
 
 class ChatServer(object):
 	def __init__(self, port):
-		self.port = int(port)
+		self.port = port
 		self.clients = {}
 		self.chat_rooms = {}
 
 	def start(self, port):
-		try:
-			#Create master socket
-			self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-			self.sock.setblocking(0)
+		#Create master socket
+		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		self.sock.setblocking(0)
 
-			#Create SSL wrapper
-			self.ssl_key = "ssl_key"
-			self.ssl_cert = "ssl_cert"
-			self.sock = ssl.wrap_socket(self.sock,server_side=True,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
-				
-			#Bind socket and start listening
-			self.sock.bind(('', self.port)) #Listen on all interfaces on port 54321
-			self.sock.listen(1000)
-			self.inputs = [self.sock, sys.stdin] #Inputs to read from
+		#Create SSL wrapper
+		self.ssl_key = "../ssl_key"
+		self.ssl_cert = "../ssl_cert"
+		self.sock = ssl.wrap_socket(self.sock,server_side=True,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 
-			self.listen_thread = threading.Thread(target=self.listener)
-			self.listen_thread.setDaemon(True)
-		except:
-			print(traceback.format_exc())
-			self.screen.addstr(10, 4, "Server failed to start!")
-			self.screen.refresh()
+		#Bind socket and start listening
+		self.sock.bind(('', int(self.port))) #Listen on all interfaces on port 54321
+		self.sock.listen(10)
+		self.inputs = [self.sock, sys.stdin] #Inputs to read from
+
+		#Spawn a thread to listen for incoming clients & messages
+		self.listen_thread = threading.Thread(target=self.listener)
+		self.listen_thread.daemon = True
+		self.listen_thread.start()
 
 	def listener(self):
-		while True:
-			read, write, err = select.select(self.inputs, [], []);
-			for s in read:
-				if s is self.sock:
-					client, address = s.accept()
-					self.client_screen.addstr(10, 4, "Client connected from %s" % address)
-				else:
-					while True:
-						message = s.recv(1024) #Grab message to be broadcast
-						if not message:
-							break
-						else:
-							message += message
+		try:
+			while True:
+				read, write, err = select.select(self.inputs, [], []);
+				for s in read:
+					if s is self.sock:
+						client, address = s.accept()	
+					else:
+						while True:
+							pass
+						#message = s.recv(1024) #Grab message to be broadcast
+						#if not message:
+					#		break
+					#	else:
+					#		message += message
 					#print message
-					if message == 'join_room':
-						self.join_room(s)
+					#if message == 'join_room':
+					#	self.join_room(s)
+		except:
+			print(traceback.format_exc())
 		
 	def broadcast_message(self, chat_room):
 		pass
@@ -104,11 +104,14 @@ class ChatServer(object):
 				self.screen.addstr(6, 4, "[3] List active chat rooms")
 				self.screen.addstr(7, 4, "[4] Exit")
 				self.screen.refresh()
-				x = self.screen.getch() #Get key press
+				x = self.screen.getch() #Get key presses
 				if x == ord('1'):
-					self.start(self.port)
-					self.screen.addstr(10, 4, "Server started on port %s" % self.port)
-					self.screen.refresh()
+					try:
+						self.start(self.port)
+						#self.screen.addstr(10, 4, "Server started on port %s" % self.port)
+						#self.screen.refresh()
+					except:
+						print(traceback.format_exc())
 				elif x == ord('2'):
 					#Place holder to draw clients
 					#self.list_clients()
@@ -119,9 +122,7 @@ class ChatServer(object):
 					pass
 				elif x == ord('4'):
 					curses.endwin()
-					sys.exit()
-
-		except Exception as e:
+		except:
 			print(traceback.format_exc())
 			#curses.endwin()
 

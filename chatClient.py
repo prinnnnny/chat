@@ -63,18 +63,21 @@ class ChatClient(object):
 			screen.clear()
 
 			#Get server IP info from input
-			screen.addstr(2, 2, "Please enter server IP")
+			screen.addstr(2, 2, "Please enter a valid IP")
 			tbox = curses.newwin(3,scr_size[1]-4, 4,4)
 			tbox.box()
 			tbox.addstr(1,1, 'Server IP: ')
 			screen.refresh()
 			tbox.refresh()
 			self.server_ip = tbox.getstr(1, len('Server IP: ')+1, 20)
+			try:
+				socket.inet_aton(self.server_ip)
+			except:
+				self.get_server_ip()
 			self.get_server_port()
 		except:
 			curses.endwin()
 
-	
 	def get_server_port(self):
 		try:
 			screen = curses.initscr()
@@ -88,11 +91,31 @@ class ChatClient(object):
 			tbox.addstr(1,1, 'Port: ')
 			screen.refresh()
 			tbox.refresh()
-			self.server_port = tbox.getstr(1, len('Port: ')+1, 5)
+			self.server_port = int(tbox.getstr(1, len('Port: ')+1, 5))
+			screen.clear()			
+
+			#Connect to server using specified IP and port
+			screen.addstr(2, 2, "Do you want to connect to the server now? y/n")
+			x = 0
+			if screen.getch() == ord('n'):
+				curses.endwin()
+			elif screen.getch() == ord('y'):
+				self.server_connect(self.server_ip, self.server_port)
 		except:
 			curses.endwin()
 
 	def server_connect(self, ip, port):
+		screen = curses.initscr()
+		scr_size = screen.getmaxyx()
+		screen.clear()
+
+		#Get server port info from input
+		screen.addstr(2, 2, "Connecting to server...")
+		tbox = curses.newwin(3,scr_size[1]-4, 4,4)
+		tbox.box()
+		tbox.addstr(1,1, 'blah')
+		screen.refresh()
+		tbox.refresh()
 		try:
 			self.sock.connect((ip, port)) #Connect to server on specified port
 		except socket.error as err:
@@ -102,7 +125,7 @@ class ChatClient(object):
 	def draw_menu(self):
 		try:
 			x = 0
-			while x != ord('7'):
+			while x != ord('8'):
 				self.screen = curses.initscr()
 				self.screen.keypad(1)
 				self.scr_size = self.screen.getmaxyx()
@@ -115,11 +138,13 @@ class ChatClient(object):
 				self.screen.addstr(7, 4, "[4] List chat rooms")
 				self.screen.addstr(8, 4, "[5] List connected users")
 				self.screen.addstr(9, 4, "[6] Enter username")
-				self.screen.addstr(10, 4, "[7] Exit")
+				self.screen.addstr(10, 4, "[7] Server status")
+				self.screen.addstr(11, 4, "[8] Exit")
 				self.screen.refresh()
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
 					self.get_server_ip()
+					#self.server_connect()
 				elif x == ord('2'):
 					#self.start_chat()
 					pass
@@ -134,7 +159,9 @@ class ChatClient(object):
 					pass
 				elif x == ord('6'):
 					self.username = self.select_username()
-				elif x == ord('7'):
+				elif x == ord('7'): 
+					pass
+				elif x == ord('8'):
 					curses.endwin()
 					sys.exit()
 		except:
