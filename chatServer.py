@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
-import socket, select, argparse, sys, ssl, time, curses, os, traceback
+import socket, select, argparse, sys, ssl, time, curses, os, traceback, threading
 from client import Client
 
 class ChatServer(object):
 	def __init__(self, port):
 		self.port = int(port)
-		self.clients = {}
+		self.clients = []
 		self.chat_rooms = {}
 
 	def start(self, port):
@@ -17,8 +17,8 @@ class ChatServer(object):
 			self.sock.setblocking(0)
 
 			#Create SSL wrapper
-			self.ssl_key = "ssl_key"
-			self.ssl_cert = "ssl_cert"
+			self.ssl_key = "../ssl_key"
+			self.ssl_cert = "../ssl_cert"
 			self.sock = ssl.wrap_socket(self.sock,server_side=True,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 				
 			#Bind socket and start listening
@@ -39,7 +39,9 @@ class ChatServer(object):
 			for s in read:
 				if s is self.sock:
 					client, address = s.accept()
-					self.client_screen.addstr(10, 4, "Client connected from %s" % address)
+					self.screen.addstr(15, 4, "Client connected from %s" % address)
+					self.screen.refresh()
+					self.clients.append(address)
 				else:
 					while True:
 						message = s.recv(1024) #Grab message to be broadcast
@@ -58,10 +60,8 @@ class ChatServer(object):
 		self.client_screen = curses.initscr()
 		self.client_screen.keypad(1)
 		self.client_screen_size = self.client_screen.getmaxyx()
-
 		win = curses.newwin(3,self.client_screen.getmaxyx()/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl called with 'k' key press
 		win.addstr(1,1,'Enter user to kick: ')
-		
 		x = 0
 		while x != ord('q'):
 			pos = 4
@@ -90,20 +90,20 @@ class ChatServer(object):
 		pass
 
 	def draw_menu(self):
+		self.screen = curses.initscr()
+		self.screen.keypad(1)
+		scr_size = self.screen.getmaxyx()
+		self.screen.clear()
+		self.screen.border(0)
+		self.screen.addstr(2, 2, "Please choose an option below")
+		self.screen.addstr(4, 4, "[1] Start server")
+		self.screen.addstr(5, 4, "[2] List connected clients")
+		self.screen.addstr(6, 4, "[3] List active chat rooms")
+		self.screen.addstr(7, 4, "[4] Exit")
+		self.screen.refresh()
 		try:
 			x = 0
 			while x != ord('4'):
-				self.screen = curses.initscr()
-				self.screen.keypad(1)
-				scr_size = self.screen.getmaxyx()
-				self.screen.clear()
-				self.screen.border(0)
-				self.screen.addstr(2, 2, "Please choose an option below")
-				self.screen.addstr(4, 4, "[1] Start server")
-				self.screen.addstr(5, 4, "[2] List connected clients")
-				self.screen.addstr(6, 4, "[3] List active chat rooms")
-				self.screen.addstr(7, 4, "[4] Exit")
-				self.screen.refresh()
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
 					self.start(self.port)
@@ -120,8 +120,7 @@ class ChatServer(object):
 				elif x == ord('4'):
 					curses.endwin()
 					sys.exit()
-
-		except Exception as e:
+		except:
 			print(traceback.format_exc())
 			#curses.endwin()
 
@@ -129,10 +128,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-p', '--port', help='Specify port to listen', action='store', dest='port', required=True)
 	args = parser.parse_args()
-	if not args.port.isdigit() and not args.port >= 1 and not args.port <=65535:
+	if not args.port.isdigit() and args.port >= 1 and args.port <=65535:
 		print 'Please specify a correct port number'
 		sys.exit(0)
 	else:
 		server = ChatServer(args.port)
-		#server.menu()
 		server.draw_menu()

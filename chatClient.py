@@ -7,7 +7,7 @@ class ChatClient(object):
 		#Create master socket
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.sock.setblocking(0)
+		#self.sock.setblocking(0)
 		self.inputs = [self.sock, sys.stdin] #Inputs to read from	
 
 		#Create SSL wrapper for socket
@@ -54,6 +54,7 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		username = tbox.getstr(1, len('Username: ')+1, 20)
+		del screen
 		return username
 
 	def get_server_ip(self):
@@ -70,7 +71,7 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_ip = tbox.getstr(1, len('Server IP: ')+1, 20)
-			self.get_server_port()
+			del screen
 		except:
 			curses.endwin()
 
@@ -89,37 +90,45 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_port = tbox.getstr(1, len('Port: ')+1, 5)
+			del screen
 		except:
 			curses.endwin()
 
 	def server_connect(self, ip, port):
 		try:
-			self.sock.connect((ip, port)) #Connect to server on specified port
+			self.sock.connect((str(ip), int(port))) #Connect to server on specified port
+			self.screen.addstr(15, 4, "Connected to server!")
+			self.screen.refresh()
 		except socket.error as err:
-			print 'Failed to connect to server'
+			curses.endwin()
+			print(traceback.format_exc())
 			sys.exit(0)
 
 	def draw_menu(self):
+		'''This draws the main menu'''
+
+		self.screen = curses.initscr()
+		self.screen.keypad(1)
+		self.scr_size = self.screen.getmaxyx()
+		self.screen.clear()
+		self.screen.border(0)
+		self.screen.addstr(2, 2, "Please choose an option below")
+		self.screen.addstr(4, 4, "[1] Connect to server")
+		self.screen.addstr(5, 4, "[2] Join chat room")
+		self.screen.addstr(6, 4, "[3] Start new private chat")
+		self.screen.addstr(7, 4, "[4] List chat rooms")
+		self.screen.addstr(8, 4, "[5] List connected users")
+		self.screen.addstr(9, 4, "[6] Enter username")
+		self.screen.addstr(10, 4, "[7] Exit")
+		self.screen.refresh()
 		try:
 			x = 0
 			while x != ord('7'):
-				self.screen = curses.initscr()
-				self.screen.keypad(1)
-				self.scr_size = self.screen.getmaxyx()
-				self.screen.clear()
-				self.screen.border(0)
-				self.screen.addstr(2, 2, "Please choose an option below")
-				self.screen.addstr(4, 4, "[1] Connect to server")
-				self.screen.addstr(5, 4, "[2] Join chat room")
-				self.screen.addstr(6, 4, "[3] Start new private chat")
-				self.screen.addstr(7, 4, "[4] List chat rooms")
-				self.screen.addstr(8, 4, "[5] List connected users")
-				self.screen.addstr(9, 4, "[6] Enter username")
-				self.screen.addstr(10, 4, "[7] Exit")
-				self.screen.refresh()
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
 					self.get_server_ip()
+					self.get_server_port()
+					self.server_connect(self.server_ip, self.server_port)
 				elif x == ord('2'):
 					#self.start_chat()
 					pass
