@@ -39,20 +39,13 @@ class ChatServer(object):
 			for s in read:
 				if s is self.sock:
 					client, address = s.accept()
-					self.screen.addstr(15, 4, "Client connected from %s" % address)
+					self.screen.addstr(15, 4, "Client connected" )
 					self.screen.refresh()
 					self.clients.append(address)
 				else:
 					while True:
-						message = s.recv(1024) #Grab message to be broadcast
-						if not message:
-							break
-						else:
-							message += message
-					#print message
-					if message == 'join_room':
-						self.join_room(s)
-		
+						pass
+	
 	def broadcast_message(self, chat_room):
 		pass
 

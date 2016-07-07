@@ -7,7 +7,6 @@ class ChatClient(object):
 		#Create master socket
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		#self.sock.setblocking(0)
 		self.inputs = [self.sock, sys.stdin] #Inputs to read from	
 
 		#Create SSL wrapper for socket
@@ -15,22 +14,11 @@ class ChatClient(object):
 		self.ssl_cert = "../ssl_cert"
 		self.sock = ssl.wrap_socket(self.sock,server_side=False,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 
-		#Grab server details from the args
-		self.screen_pointer = 10
-
 	def start(self):
 		self.draw_menu()
 
 	def join_room(self):
-		print 'Requesting rooms from server...'
-		self.sock.send('join_room')
-		while True:
-			resp = self.sock.recv(1024)
-			if not resp:
-				break
-			else:
-				resp += resp
-				print resp + '\n'
+		pass
 
 	def start_room(self):
 		print 'Create a new chat room'
@@ -54,7 +42,6 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		username = tbox.getstr(1, len('Username: ')+1, 20)
-		del screen
 		return username
 
 	def get_server_ip(self):
@@ -71,11 +58,10 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_ip = tbox.getstr(1, len('Server IP: ')+1, 20)
-			del screen
+			return
 		except:
 			curses.endwin()
 
-	
 	def get_server_port(self):
 		try:
 			screen = curses.initscr()
@@ -90,7 +76,7 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_port = tbox.getstr(1, len('Port: ')+1, 5)
-			del screen
+			return
 		except:
 			curses.endwin()
 
@@ -99,7 +85,7 @@ class ChatClient(object):
 			self.sock.connect((str(ip), int(port))) #Connect to server on specified port
 			self.screen.addstr(15, 4, "Connected to server!")
 			self.screen.refresh()
-		except socket.error as err:
+		except socket.error:
 			curses.endwin()
 			print(traceback.format_exc())
 			sys.exit(0)
