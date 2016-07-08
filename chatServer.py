@@ -8,6 +8,17 @@ class ChatServer(object):
 		self.port = int(port)
 		self.clients = []
 		self.chat_rooms = {}
+		self.win_pointer = 12
+
+		#Values to be used for struct
+		''' a = struct.Struct('>ii') 2 ints for type and len
+			normal = a.pack('>ii', 0, msg_len)
+			join = a.pack('>ii', 1)
+ 			user = a.pack('>ii', 2)
+ 			pass = a.pack('>ii', 3)
+ 			direct = a.pack('>ii', 4)
+ 			command = a.pack('>ii', 5)
+ 			server = a.pack('>ii', 6) '''
 
 	def start(self, port):
 		try:
@@ -27,7 +38,9 @@ class ChatServer(object):
 			self.inputs = [self.sock, sys.stdin] #Inputs to read from
 
 			self.listen_thread = threading.Thread(target=self.listener)
-			self.listen_thread.setDaemon(True)
+			self.listen_thread.daemon = True
+			self.listen_thread.start()
+
 		except:
 			print(traceback.format_exc())
 			self.screen.addstr(10, 4, "Server failed to start!")
@@ -35,45 +48,67 @@ class ChatServer(object):
 
 	def listener(self):
 		while True:
-			read, write, err = select.select(self.inputs, [], []);
+			read, write, err = select.select(self.inputs, [], [])
 			for s in read:
 				if s is self.sock:
 					client, address = s.accept()
-					self.screen.addstr(15, 4, "Client connected" )
 					self.screen.refresh()
 					self.clients.append(address)
+					self.screen.addstr(self.win_pointer, 4, "Client connected")
+					self.screen.refresh()
+					self.win_pointer +=1
 				else:
-					while True:
-						pass
-	
+					self.message_parser(s)
+					
+	def packer(self, msg_type, message):
+		#pack = struct.Struct('>ii')
+		#msg_len = len(message)
+		#full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
+		#return full_msg
+		pass
+
+	def unpacker(self, data):
+		#pack = struct.Struct('>ii')
+		#packed_data = binascii.unhexlify(data)
+		#unpacked = pack.unpack(packed_data)
+		#msg_type = unpacked[0]
+		#msg_len = unpacked[1]
+		pass
+
+	def message_parser(self,socket):
+		msg_type = self.unpacker(s.recv(100))	
+
 	def broadcast_message(self, chat_room):
 		pass
 
 	def list_clients(self):
-		self.client_screen = curses.initscr()
-		self.client_screen.keypad(1)
-		self.client_screen_size = self.client_screen.getmaxyx()
-		win = curses.newwin(3,self.client_screen.getmaxyx()/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl called with 'k' key press
-		win.addstr(1,1,'Enter user to kick: ')
+		self.screen.clear()
+		client_screen = curses.initscr()
+		client_screen.keypad(1)
+		client_screen_size = client_screen.getmaxyx()
 		x = 0
 		while x != ord('q'):
-			pos = 4
-			#self.client_screen.clear()
-			self.client_screen.addstr(2, 2, "Press q to quit or k to kick a client")
-			self.client_screen.addstr(4, 2, "Connected clients:")
-			for client in self.clients.values():
-				self.client_screen.addstr(pos, 2, client)
+			pos = 6
+			client_screen.addstr(2, 2, "Press q to quit or k to kick a client")
+			client_screen.addstr(4, 2, "Connected clients:")
+			for client in self.clients:
+				client_screen.addstr(pos, 4, str(client))
 				pos += 1
-			x = self.client_screen.getch()
+			client_screen.refresh()
+			x = client_screen.getch()
 			if x == ord('q'):
+				curses.endwin()
 				self.draw_menu()
 			elif x == ord('k'):
+				win = curses.newwin(3,client_screen_size[0]/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl calle    d with 'k' key press
+				client_creen.clear()
+				win.addstr(1,1,'Enter user to kick: ')
 				win.box()
-				self.client_screen.refresh()
+				client_screen.refresh()
 				win.refresh()
 				client_to_kick = win.getstr(1, len('Enter user to kick: ')+1, 20) 
 				#self.clients.remove(client_to_kick)
-				if not client_to_kick in self.clients.values:
+				if not client_to_kick in self.clients:
 					win.addstr(1,1,'User does not exist!')
 					time.sleep(1)
 					self.list_clients()
@@ -104,7 +139,7 @@ class ChatServer(object):
 					self.screen.refresh()
 				elif x == ord('2'):
 					#Place holder to draw clients
-					#self.list_clients()
+					self.list_clients()
 					pass
 				elif x == ord('3'):
 					#Place holder to draw chat rooms

@@ -14,6 +14,15 @@ class ChatClient(object):
 		self.ssl_cert = "../ssl_cert"
 		self.sock = ssl.wrap_socket(self.sock,server_side=False,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 
+		#Values to be used for struct
+		''' normal = struct.pack('>h', 0)
+		join = struct.pack('>i', 1)
+		user = struct.pack('>i', 2)
+		pass = struct.pack('>i', 3)
+		direct = struct.pack('>i', 4)
+		command = struct.pack('>i', 5)
+		server = struct.pack('>i', 6) '''
+		
 	def start(self):
 		self.draw_menu()
 
@@ -58,7 +67,6 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_ip = tbox.getstr(1, len('Server IP: ')+1, 20)
-			return
 		except:
 			curses.endwin()
 
@@ -76,19 +84,76 @@ class ChatClient(object):
 			screen.refresh()
 			tbox.refresh()
 			self.server_port = tbox.getstr(1, len('Port: ')+1, 5)
-			return
+			curses.endwin()
 		except:
 			curses.endwin()
 
 	def server_connect(self, ip, port):
 		try:
 			self.sock.connect((str(ip), int(port))) #Connect to server on specified port
-			self.screen.addstr(15, 4, "Connected to server!")
-			self.screen.refresh()
 		except socket.error:
-			curses.endwin()
 			print(traceback.format_exc())
-			sys.exit(0)
+
+	def packer(self, msg_type, message):
+		#pack = struct.Struct('>ii')
+		#msg_len = len(message)
+		#full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
+		#return full_msg
+		pass
+
+	def unpacker(self, data):
+		#pack = struct.Struct('>ii')
+		#packed_data = binascii.unhexlify(data)
+		#unpacked = pack.unpack(packed_data)
+		#msg_type = unpacked[0]
+		#msg_len = unpacked[1]
+		pass
+
+	def chat_window():
+		try:
+			#Counters used to guage where to insert new lines into boxes
+			ctr = 2
+			user_ctr = 1
+
+			screen = curses.initscr() #Init screen
+			screen.keypad(1) #Accept special keys i.e up and down arrows
+			scr_size = screen.getmaxyx() #Get height and width of main screen
+
+			win = curses.newwin(scr_size[0]-10, scr_size[1]/5, 0, 0)
+			win2 = curses.newwin(scr_size[0]-10, 10000 - scr_size[1]/5, 0, scr_size[1]/5)
+			win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
+
+			#User box, top left
+			win.box()
+			win.addstr(user_ctr,1,'Users', curses.A_BOLD)
+			user_ctr += 1
+			win.addstr(user_ctr,1,username)
+
+			#Main chat window
+			win2.box()
+			win2.addstr(1,1,'Chat', curses.A_BOLD)
+
+			#Actual input window
+			win3.box()
+			win3.addstr(1,1,username)
+
+			#Refresh screen with updated changes
+			screen.refresh()
+			win.refresh()
+			win2.refresh()
+			win3.refresh()
+			while True:
+				text = win3.getstr(1,len(username)+1,500)
+				win2.addstr(1,1,'Chat', curses.A_BOLD)
+				win2.addstr(ctr,1,(username + text))
+				ctr += 1
+				win2.refresh()
+				win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
+				win3.box()
+				win3.addstr(1,1,username)
+				win3.refresh()
+		except:
+			curses.endwin()
 
 	def draw_menu(self):
 		'''This draws the main menu'''
@@ -115,6 +180,9 @@ class ChatClient(object):
 					self.get_server_ip()
 					self.get_server_port()
 					self.server_connect(self.server_ip, self.server_port)
+					self.draw_menu()
+					self.screen.addstr(15, 4, "Connected to server!")
+					self.screen.refresh()
 				elif x == ord('2'):
 					#self.start_chat()
 					pass
