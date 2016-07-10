@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import socket, select, argparse, sys, ssl, time, curses, os, traceback, threading
+import socket, select, argparse, sys, ssl, time, curses, os, traceback, threading, messages
 from client import Client
 
 class ChatServer(object):
@@ -13,12 +13,12 @@ class ChatServer(object):
 		#Values to be used for struct
 		''' a = struct.Struct('>ii') 2 ints for type and len
 			normal = a.pack('>ii', 0, msg_len)
-			join = a.pack('>ii', 1)
- 			user = a.pack('>ii', 2)
- 			pass = a.pack('>ii', 3)
- 			direct = a.pack('>ii', 4)
- 			command = a.pack('>ii', 5)
- 			server = a.pack('>ii', 6) '''
+			join = a.pack('>ii', 1, msg_len)
+ 			user = a.pack('>ii', 2, msg_len)
+ 			pass = a.pack('>ii', 3, msg_len)
+ 			direct = a.pack('>ii', 4, msg_len)
+ 			command = a.pack('>ii', 5, msg_len)
+ 			server = a.pack('>ii', 6, msg_len) '''
 
 	def start(self, port):
 		try:
@@ -61,19 +61,19 @@ class ChatServer(object):
 					self.message_parser(s)
 					
 	def packer(self, msg_type, message):
-		#pack = struct.Struct('>ii')
-		#msg_len = len(message)
-		#full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
-		#return full_msg
-		pass
+		pack = struct.Struct('>ii')
+		msg_len = len(message)
+		full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
+		return full_msg
 
 	def unpacker(self, data):
-		#pack = struct.Struct('>ii')
-		#packed_data = binascii.unhexlify(data)
-		#unpacked = pack.unpack(packed_data)
-		#msg_type = unpacked[0]
-		#msg_len = unpacked[1]
-		pass
+		pack = struct.Struct('>ii')
+		packed_data = binascii.unhexlify(data)
+		unpacked = pack.unpack(packed_data[0:8])
+		msg_type = unpacked[0]
+		msg_len = unpacked[1]
+		msg = unpacked[8::]
+		return msg	
 
 	def message_parser(self,socket):
 		msg_type = self.unpacker(s.recv(100))	
@@ -82,7 +82,7 @@ class ChatServer(object):
 		pass
 
 	def list_clients(self):
-		self.screen.clear()
+		#self.screen.clear()
 		client_screen = curses.initscr()
 		client_screen.keypad(1)
 		client_screen_size = client_screen.getmaxyx()
@@ -95,13 +95,14 @@ class ChatServer(object):
 				client_screen.addstr(pos, 4, str(client))
 				pos += 1
 			client_screen.refresh()
+
 			x = client_screen.getch()
 			if x == ord('q'):
 				curses.endwin()
 				self.draw_menu()
 			elif x == ord('k'):
 				win = curses.newwin(3,client_screen_size[0]/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl calle    d with 'k' key press
-				client_creen.clear()
+				client_screen.clear()
 				win.addstr(1,1,'Enter user to kick: ')
 				win.box()
 				client_screen.refresh()
@@ -112,6 +113,7 @@ class ChatServer(object):
 					win.addstr(1,1,'User does not exist!')
 					time.sleep(1)
 					self.list_clients()
+		curses.endwin()
 
 	def list_rooms(self):
 		#return [room, users for room,users in self.chat_rooms.iteritems()]

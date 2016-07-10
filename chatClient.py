@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import socket, argparse, sys, ssl, hashlib, os, curses, readline, traceback
+import socket, argparse, sys, ssl, hashlib, os, curses, readline, traceback, messages
 
 class ChatClient(object):
 	def __init__(self):
@@ -14,14 +14,16 @@ class ChatClient(object):
 		self.ssl_cert = "../ssl_cert"
 		self.sock = ssl.wrap_socket(self.sock,server_side=False,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 
-		#Values to be used for struct
-		''' normal = struct.pack('>h', 0)
-		join = struct.pack('>i', 1)
-		user = struct.pack('>i', 2)
-		pass = struct.pack('>i', 3)
-		direct = struct.pack('>i', 4)
-		command = struct.pack('>i', 5)
-		server = struct.pack('>i', 6) '''
+		#Values to be used for constructing message types
+		''' normal = struct.pack('>ii', 0, msg_len)
+		join = struct.pack('>ii', 1, msg_len)
+		user = struct.pack('>ii', 2, msg_len)
+		pass = struct.pack('>ii', 3, msg_len)
+		direct = struct.pack('>ii', 4, msg_len)
+		command = struct.pack('>ii', 5, msg_len)
+		server = struct.pack('>ii', 6, msg_len) '''
+
+		self.username = ''
 		
 	def start(self):
 		self.draw_menu()
@@ -50,9 +52,16 @@ class ChatClient(object):
 		tbox.addstr(1,1, 'Username: ')
 		screen.refresh()
 		tbox.refresh()
-		username = tbox.getstr(1, len('Username: ')+1, 20)
-		return username
+		self.username = tbox.getstr(1, len('Username: ')+1, 20)
 
+	def construct_msg(self, msg_type, msg):
+		packed_msg = messages.packer(msg_type, msg)
+		return packed_msg
+
+	def send_msg(self, packed_msg):
+		max_len = 1024
+		self.sock.send(packed_msg)
+		
 	def get_server_ip(self):
 		try:
 			screen = curses.initscr()
@@ -93,22 +102,7 @@ class ChatClient(object):
 			self.sock.connect((str(ip), int(port))) #Connect to server on specified port
 		except socket.error:
 			print(traceback.format_exc())
-
-	def packer(self, msg_type, message):
-		#pack = struct.Struct('>ii')
-		#msg_len = len(message)
-		#full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
-		#return full_msg
-		pass
-
-	def unpacker(self, data):
-		#pack = struct.Struct('>ii')
-		#packed_data = binascii.unhexlify(data)
-		#unpacked = pack.unpack(packed_data)
-		#msg_type = unpacked[0]
-		#msg_len = unpacked[1]
-		pass
-
+	
 	def chat_window():
 		try:
 			#Counters used to guage where to insert new lines into boxes
@@ -160,17 +154,18 @@ class ChatClient(object):
 
 		self.screen = curses.initscr()
 		self.screen.keypad(1)
+		self.screen.border(1)
 		self.scr_size = self.screen.getmaxyx()
 		self.screen.clear()
-		self.screen.border(0)
-		self.screen.addstr(2, 2, "Please choose an option below")
-		self.screen.addstr(4, 4, "[1] Connect to server")
-		self.screen.addstr(5, 4, "[2] Join chat room")
-		self.screen.addstr(6, 4, "[3] Start new private chat")
-		self.screen.addstr(7, 4, "[4] List chat rooms")
-		self.screen.addstr(8, 4, "[5] List connected users")
-		self.screen.addstr(9, 4, "[6] Enter username")
-		self.screen.addstr(10, 4, "[7] Exit")
+		self.screen.addstr(2, 2, "Welcome, %s!" % str(self.username))
+		self.screen.addstr(4, 2, "Please choose an option below")
+		self.screen.addstr(6, 4, "[1] Connect to server")
+		self.screen.addstr(7, 4, "[2] Join chat room")
+		self.screen.addstr(8, 4, "[3] Start new private chat")
+		self.screen.addstr(9, 4, "[4] List chat rooms")
+		self.screen.addstr(10, 4, "[5] List connected users")
+		self.screen.addstr(11, 4, "[6] Enter username")
+		self.screen.addstr(12, 4, "[7] Exit")
 		self.screen.refresh()
 		try:
 			x = 0
@@ -197,6 +192,7 @@ class ChatClient(object):
 					pass
 				elif x == ord('6'):
 					self.username = self.select_username()
+					self.draw_menu()
 				elif x == ord('7'):
 					curses.endwin()
 					sys.exit()
@@ -205,10 +201,10 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument('-u', '--username', help='Specify username', action='store', dest='username', required=False)
-	parser.add_argument('-s', '--server', help='Specify server IP address', action='store', dest='server', required=False)
-	parser.add_argument('-p', '--port', help='Specify server port', action='store', dest='port', required=False)
-	args = parser.parse_args()
+	#parser = argparse.ArgumentParser()
+	#parser.add_argument('-u', '--username', help='Specify username', action='store', dest='username', required=False)
+	#parser.add_argument('-s', '--server', help='Specify server IP address', action='store', dest='server', required=False)
+	#parser.add_argument('-p', '--port', help='Specify server port', action='store', dest='port', required=False)
+	#args = parser.parse_args()
 	client = ChatClient()
 	client.draw_menu()
