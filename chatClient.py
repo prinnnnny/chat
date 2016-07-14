@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import socket, argparse, sys, ssl, hashlib, os, curses, readline, traceback, messages
+import socket, sys, ssl, hashlib, os, curses, readline, traceback, messages
 
 class ChatClient(object):
 	def __init__(self):
@@ -15,21 +15,54 @@ class ChatClient(object):
 		self.sock = ssl.wrap_socket(self.sock,server_side=False,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
 
 		#Values to be used for constructing message types
-		''' normal = struct.pack('>ii', 0, msg_len)
-		join = struct.pack('>ii', 1, msg_len)
-		user = struct.pack('>ii', 2, msg_len)
-		pass = struct.pack('>ii', 3, msg_len)
-		direct = struct.pack('>ii', 4, msg_len)
-		command = struct.pack('>ii', 5, msg_len)
-		server = struct.pack('>ii', 6, msg_len) '''
+		self.normal = 0
+		self.join = 1
+		self.user = 2
+		self.password = 3
+		self.direct = 4
+		self.command = 5
+		self.server = 6
 
 		self.username = ''
-		
+
+		self.msg_queue = []
+
+	def listener(self):
+		while True:
+			read, write, err = select.select(self.inputs, [], [])
+			for socket in read:
+				if self.sock in read:
+					msg_type, msg = messages.raw_recv(socket)
+
+	def paint_window(self):
+		screen = curses.initscr()
+		screen.border(1)
+		scr_size = screen.getmaxyx()
+		return screen, scr_size
+
 	def start(self):
 		self.draw_menu()
 
+	def start_chat(self):
+		screen, scr_size = self.paint_window()
+		screen.addstr(2, 2, "You will be placed into the default chat room to begin unless you provide a room name")
+		screen.addstr(4, 2, "Would you like to enter a room name? y/n")
+		x = screen.getch()
+		if x == ord('y'):
+			self.join_room()
+		else:
+			self.chat_window()		
+
 	def join_room(self):
-		pass
+		screen, scr_size = self.paint_window()
+		screen.addstr(2, 2, "Please enter name of chat you wish to join:")
+		tbox = curses.newwin(3,scr_size[1]-4, 4,4)
+		tbox.box()
+		tbox.addstr(1,1, 'Room name: ')
+		screen.refresh()
+		tbox.refresh()
+		room_name = tbox.getstr(1, len('Please enter name of chat you wish to join: ')+1, 20)
+		messages.raw_send(room_name, self.join, self.sock)
 
 	def start_room(self):
 		print 'Create a new chat room'
@@ -39,8 +72,6 @@ class ChatClient(object):
 			password = raw_input('Please enter a password: ')
 			pass_hash = hashlib.sha224(password).hexdigest() #Create secure password for chat room
 			self.sock.send()
-		else:
-			self.sock.send() #place holder for room name and password
 
 	def select_username(self):
 		screen = curses.initscr()
@@ -53,14 +84,26 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		self.username = tbox.getstr(1, len('Username: ')+1, 20)
+		messages.raw_send(self.username, self.user, self.sock)
 
-	def construct_msg(self, msg_type, msg):
-		packed_msg = messages.packer(msg_type, msg)
-		return packed_msg
-
-	def send_msg(self, packed_msg):
-		max_len = 1024
-		self.sock.send(packed_msg)
+	def msg_handler(self, msg_type, msg, sock_obj):
+		if msg_type == self.normal:
+			pass
+			#maybe append the msg to the self.msg_queue which can be used when drawing messages
+		elif msg_type == self.join:
+			pass
+		elif msg_type == self.user:
+			pass
+		elif msg_type == self.password:
+			pass
+		elif msg_type == self.direct:
+			pass
+		elif msg_type == self.command:
+			pass
+		elif msg_type == self.server:
+			pass
+		else:
+			pass
 		
 	def get_server_ip(self):
 		try:
@@ -96,6 +139,9 @@ class ChatClient(object):
 			curses.endwin()
 		except:
 			curses.endwin()
+
+	def get_active_users(self):
+		self.send_msg(self.construct_msg(self.command, 'list_users'))
 
 	def server_connect(self, ip, port):
 		try:
@@ -138,6 +184,7 @@ class ChatClient(object):
 			win3.refresh()
 			while True:
 				text = win3.getstr(1,len(username)+1,500)
+				self.send_msg(self.construct_msg(self.normal, text))
 				win2.addstr(1,1,'Chat', curses.A_BOLD)
 				win2.addstr(ctr,1,(username + text))
 				ctr += 1
@@ -146,6 +193,9 @@ class ChatClient(object):
 				win3.box()
 				win3.addstr(1,1,username)
 				win3.refresh()
+
+				'''Perhaps look to have a queue here so that we receive a self.normal message, we add it to the list and when itering thru the while loop we check to see if there are any messages to print to the screen?'''
+		
 		except:
 			curses.endwin()
 
@@ -201,10 +251,5 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 if __name__ == '__main__':
-	#parser = argparse.ArgumentParser()
-	#parser.add_argument('-u', '--username', help='Specify username', action='store', dest='username', required=False)
-	#parser.add_argument('-s', '--server', help='Specify server IP address', action='store', dest='server', required=False)
-	#parser.add_argument('-p', '--port', help='Specify server port', action='store', dest='port', required=False)
-	#args = parser.parse_args()
 	client = ChatClient()
 	client.draw_menu()

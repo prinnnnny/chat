@@ -7,18 +7,17 @@ class ChatServer(object):
 	def __init__(self, port):
 		self.port = int(port)
 		self.clients = []
-		self.chat_rooms = {}
+		self.client_dict = {}
+		self.chat_rooms = {'default':[]}
 		self.win_pointer = 12
 
-		#Values to be used for struct
-		''' a = struct.Struct('>ii') 2 ints for type and len
-			normal = a.pack('>ii', 0, msg_len)
-			join = a.pack('>ii', 1, msg_len)
- 			user = a.pack('>ii', 2, msg_len)
- 			pass = a.pack('>ii', 3, msg_len)
- 			direct = a.pack('>ii', 4, msg_len)
- 			command = a.pack('>ii', 5, msg_len)
- 			server = a.pack('>ii', 6, msg_len) '''
+		self.normal = 0
+		self.join = 1
+		self.user = 2
+		self.password = 3
+		self.direct = 4
+		self.command = 5
+		self.server = 6
 
 	def start(self, port):
 		try:
@@ -54,36 +53,61 @@ class ChatServer(object):
 					client, address = s.accept()
 					self.screen.refresh()
 					self.clients.append(address)
-					self.screen.addstr(self.win_pointer, 4, "Client connected")
+					#Create a new dict key/value pair for the socket and the hostname and room name
+					self.client_dict[client] = ['Anon', 'default']
+					#Append the socket to the room so we can later send them messages in self.broadcast
+					self.chat_rooms['default'].append(client)
+					self.screen.addstr(self.win_pointer, 4, "Client connected from %s" % str(address))
 					self.screen.refresh()
 					self.win_pointer +=1
 				else:
-					self.message_parser(s)
-					
-	def packer(self, msg_type, message):
-		pack = struct.Struct('>ii')
-		msg_len = len(message)
-		full_msg = binascii.hexlify(pack.pack(msg_type, msg_len) + message)
-		return full_msg
+					receiving = True
+					data = ''
+					while receiving:
+						data += s.recv(1024)
+						if not data:
+							receiving = False
+					msg_type, msg = messages.unpacker(data)
+					self.msg_handler(msg_type, msg, s)
 
-	def unpacker(self, data):
-		pack = struct.Struct('>ii')
-		packed_data = binascii.unhexlify(data)
-		unpacked = pack.unpack(packed_data[0:8])
-		msg_type = unpacked[0]
-		msg_len = unpacked[1]
-		msg = unpacked[8::]
-		return msg	
+	def msg_handler(self, msg_type, msg, sock_obj):
+		if msg_type == self.normal:
+			self.broadcast_msg(msg, sock_obj)
+		elif msg_type == self.join:
+			self.join_new_room(msg, sock_obj)	
+		elif msg_type == self.user:
+			self.change_username(msg, sock_obj)	
+		elif msg_type == self.password:
+			pass
+		elif msg_type == self.direct:
+			pass
+		elif msg_type == self.command:
+			pass
+		elif msg_type == self.server:
+			pass
+		else:
+			try:
+				if hasattr(self, msg):
+					getattr(self, msg)(sock_obj)
+			except:
+				pass
 
-	def message_parser(self,socket):
-		msg_type = self.unpacker(s.recv(100))	
+	def broadcast_msg(self, msg, sock_obj):
+		room = self.client_dict[sock_obj][1] #Get room from client dict
+		for client in self.chat_rooms[room]:
+			if client is sock_obj: #Don't echo the same message back to the client
+				pass
+			else:
+				messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
 
-	def broadcast_message(self, chat_room):
-		pass
+	def change_username(self, msg, sock_obj):
+		new_username = msg
+		self.client_dict[sock_obj][0] = str(new_username)
 
 	def list_clients(self):
 		#self.screen.clear()
 		client_screen = curses.initscr()
+		client_screen.clear()
 		client_screen.keypad(1)
 		client_screen_size = client_screen.getmaxyx()
 		x = 0
@@ -91,8 +115,13 @@ class ChatServer(object):
 			pos = 6
 			client_screen.addstr(2, 2, "Press q to quit or k to kick a client")
 			client_screen.addstr(4, 2, "Connected clients:")
-			for client in self.clients:
-				client_screen.addstr(pos, 4, str(client))
+		
+			#Grab username from client dict	
+			#for key, values in self.clients_iteritems():
+			#	client_screen.addstr(pos, 6, str(values[0]))
+			
+			for client in self.client_dict:
+				client_screen.addstr(pos, 6, str(self.client_dict[client][0]))
 				pos += 1
 			client_screen.refresh()
 
@@ -115,9 +144,27 @@ class ChatServer(object):
 					self.list_clients()
 		curses.endwin()
 
-	def list_rooms(self):
-		#return [room, users for room,users in self.chat_rooms.iteritems()]
-		pass
+	def list_rooms(self, sock_obj):
+		rooms = []
+		for room in self.chat_rooms:
+			rooms.append(room)
+		return rooms
+
+	def list_users(self, sock_obj):
+		clients = []
+		chat_room = self.client_dict[sock_obj][1]
+		for client in chat_room:
+			clients.append(client)
+		return clients
+
+	def join_new_room(self, msg, sock_obj):
+		room_to_join = msg
+		if room_to_join not in self.chat_rooms:
+			self.chat_rooms[room_to_join] = []
+			self.self.chat_rooms[room_to_join].append(sock_obj)
+		else:
+			self.client_dict[sock_obj][1] = room_to_join
+			self.chat_rooms[room_to_join].append(sock_obj)
 
 	def draw_menu(self):
 		self.screen = curses.initscr()
@@ -156,6 +203,7 @@ class ChatServer(object):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
+	#Here we specify the port number we are going to be listening on
 	parser.add_argument('-p', '--port', help='Specify port to listen', action='store', dest='port', required=True)
 	args = parser.parse_args()
 	if not args.port.isdigit() and args.port >= 1 and args.port <=65535:
