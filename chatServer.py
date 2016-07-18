@@ -81,7 +81,6 @@ class ChatServer(object):
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
-			print msg
 			self.broadcast_msg(msg, sock_obj)
 		elif msg_type == self.join:
 			self.join_new_room(msg, sock_obj)
@@ -107,18 +106,20 @@ class ChatServer(object):
 
 	def broadcast_msg(self, msg, sock_obj):
 		room = self.client_dict[sock_obj][1] #Get room from client dict
+		print room
 		for client in self.chat_rooms[room]:
-			if client is sock_obj: #Don't echo the same message back to the client
-				pass
-			else:
-				messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
+			print client
+			#if client is sock_obj: #Don't echo the same message back to the client
+			#	pass
+			#else:
+			messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
 
 	def add_user(self, msg, sock_obj):
 		pair = msg
 		username = pair.split(':')[0]
 		password = pair.split(':')[1]
 		self.client_dict[sock_obj][0] = str(username)
-		self.client_dict[sock_obj][1] = str(password)
+		self.client_dict[sock_obj][2] = str(password)
 
 	def list_clients(self):
 		users = []

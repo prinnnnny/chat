@@ -92,8 +92,8 @@ class ChatClient(object):
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
-			pass
-			#maybe append the msg to the self.msg_queue which can be used when drawing messages
+			print msg
+			self.msg_queue.append(msg)
 		elif msg_type == self.join:
 			pass
 		elif msg_type == self.user:
@@ -180,7 +180,7 @@ class ChatClient(object):
 
 			#Input window
 			win3.box()
-			win3.addstr(1,1,username)
+			win3.addstr(1,1,self.username + ': ')
 
 			#Refresh screen with updated changes
 			screen.refresh()
@@ -188,18 +188,33 @@ class ChatClient(object):
 			win2.refresh()
 			win3.refresh()
 			while True:
-				text = win3.getstr(1,len(username)+1,500)
+				#Grab text and ship it to messages to send to server
+				text = win3.getstr(1,len(self.username + ': ')+1,500)
 				messages.raw_send(text, self.normal, self.sock)
-				win2.addstr(1,1,'Chat', curses.A_BOLD)
-				win2.addstr(ctr,1,(username + text))
+
+				#Update chat window with new message from local user
+				#win2.addstr(1,1,'Chat', curses.A_BOLD)
+				win2.addstr(ctr,1,(self.username + text))
 				ctr += 1
-				win2.refresh()
+
+				#Redraw input window
 				win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
 				win3.box()
-				win3.addstr(1,1,username)
+				win3.addstr(1,1,self.username + ': ')
+
+				#Check for any new messages received on socket
+				if len(self.msg_queue) > 0:
+					curses.endwin()
+					for msg in self.msg_queue:
+						win2.addstr(ctr,1,str(msg))
+						ctr += 1
+
+				#Refresh all boxes
+				screen.refresh()
+				win.refresh()
+				win2.refresh()
 				win3.refresh()
 
-				'''Perhaps look to have a queue here so that we receive a self.normal message, we add it to the list and when itering thru the while loop we check to see if there are any messages to print to the screen?'''
 		except:
 			print(traceback.format_exc())
 			#curses.endwin()
