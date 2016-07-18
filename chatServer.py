@@ -19,6 +19,8 @@ class ChatServer(object):
 		self.command = 5
 		self.server = 6
 
+		self.header_len = 8
+
 	def start(self, port):
 		try:
 			#Create master socket
@@ -30,11 +32,11 @@ class ChatServer(object):
 			self.ssl_key = "../ssl_key"
 			self.ssl_cert = "../ssl_cert"
 			self.sock = ssl.wrap_socket(self.sock,server_side=True,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
-				
+
 			#Bind socket and start listening
 			self.sock.bind(('', self.port)) #Listen on all interfaces on port 54321
 			self.sock.listen(1000)
-			self.inputs = [self.sock, sys.stdin] #Inputs to read from
+			self.inputs = [self.sock] #Inputs to read from
 
 			self.listen_thread = threading.Thread(target=self.listener)
 			self.listen_thread.daemon = True
@@ -53,30 +55,55 @@ class ChatServer(object):
 					client, address = s.accept()
 					self.screen.refresh()
 					self.clients.append(address)
+					self.inputs.append(client)
 					#Create a new dict key/value pair for the socket and the hostname and room name
 					self.client_dict[client] = ['Anon', 'default']
 					#Append the socket to the room so we can later send them messages in self.broadcast
 					self.chat_rooms['default'].append(client)
 					self.screen.addstr(self.win_pointer, 4, "Client connected from %s" % str(address))
+					self.win_pointer +=1
+					self.screen.addstr(self.win_pointer, 4, "")
 					self.screen.refresh()
 					self.win_pointer +=1
 				else:
-					receiving = True
-					data = ''
-					while receiving:
-						data += s.recv(1024)
-						if not data:
-							receiving = False
-					msg_type, msg = messages.unpacker(data)
-					self.msg_handler(msg_type, msg, s)
+					#msg_type, msg_len = messages.raw_recv(s)
+					#self.screen.addstr(self.win_pointer, 4, "%s %s" % (msg_type, msg_len))
+					#self.win_pointer +=1
+					#msg = messages.recv_msg(msg_len, s)
+					#self.screen.addstr(self.win_pointer, 4, "%s" % msg)
+					#self.win_pointer +=1
+					#self.screen.refresh()
+
+					try:
+						#data = ''
+						#while True:
+						#	data += s.recv(100)
+						#	print data
+						#	if data:
+						#		self.screen.addstr(self.win_pointer, 4, "")
+						#		self.win_pointer += 1
+						#		self.screen.refresh()
+						#		data = ''
+						#	else:
+						#		break
+						msg_type, msg_len = messages.raw_recv(s)
+						self.screen.addstr(self.win_pointer, 4, "%s %s" % (msg_type, msg_len))
+						self.win_pointer += 1
+						msg = messages.recv_msg(msg_len, s)
+						self.screen.addstr(self.win_pointer, 4, "Message recvd %s" % msg)
+						#self.msg_handler(msg_type, msg, s)
+						self.win_pointer += 1
+						self.screen.refresh()
+					except:
+						pass
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
 			self.broadcast_msg(msg, sock_obj)
 		elif msg_type == self.join:
-			self.join_new_room(msg, sock_obj)	
+			self.join_new_room(msg, sock_obj)
 		elif msg_type == self.user:
-			self.change_username(msg, sock_obj)	
+			self.change_username(msg, sock_obj)
 		elif msg_type == self.password:
 			pass
 		elif msg_type == self.direct:
@@ -105,44 +132,43 @@ class ChatServer(object):
 		self.client_dict[sock_obj][0] = str(new_username)
 
 	def list_clients(self):
-		#self.screen.clear()
-		client_screen = curses.initscr()
-		client_screen.clear()
-		client_screen.keypad(1)
-		client_screen_size = client_screen.getmaxyx()
-		x = 0
-		while x != ord('q'):
-			pos = 6
-			client_screen.addstr(2, 2, "Press q to quit or k to kick a client")
-			client_screen.addstr(4, 2, "Connected clients:")
-		
-			#Grab username from client dict	
-			#for key, values in self.clients_iteritems():
-			#	client_screen.addstr(pos, 6, str(values[0]))
-			
-			for client in self.client_dict:
-				client_screen.addstr(pos, 6, str(self.client_dict[client][0]))
-				pos += 1
-			client_screen.refresh()
+		try:
+			client_screen = curses.initscr()
+			client_screen.clear()
+			client_screen.keypad(1)
+			client_screen_size = client_screen.getmaxyx()
+			x = 0
+			while x != ord('q'):
+				pos = 6
+				client_screen.addstr(2, 2, "Press q to quit or k to kick a client")
+				client_screen.addstr(4, 2, "Connected clients:")
 
-			x = client_screen.getch()
-			if x == ord('q'):
-				curses.endwin()
-				self.draw_menu()
-			elif x == ord('k'):
-				win = curses.newwin(3,client_screen_size[0]/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl calle    d with 'k' key press
-				client_screen.clear()
-				win.addstr(1,1,'Enter user to kick: ')
-				win.box()
+				#Grab username from client dict
+				for client in self.client_dict:
+					client_screen.addstr(pos, 6, self.client_dict[client][0])
+					pos += 1
 				client_screen.refresh()
-				win.refresh()
-				client_to_kick = win.getstr(1, len('Enter user to kick: ')+1, 20) 
-				#self.clients.remove(client_to_kick)
-				if not client_to_kick in self.clients:
-					win.addstr(1,1,'User does not exist!')
-					time.sleep(1)
-					self.list_clients()
-		curses.endwin()
+
+				x = client_screen.getch()
+				if x == ord('q'):
+					curses.endwin()
+					self.draw_menu()
+				elif x == ord('k'):
+					win = curses.newwin(3,client_screen_size[0]/2, 1,1) #Box to be used to accept input when kicking a client but will remain hidden untl calle    d with 'k' key press
+					client_screen.clear()
+					win.addstr(1,1,'Enter user to kick: ')
+					win.box()
+					client_screen.refresh()
+					win.refresh()
+					client_to_kick = win.getstr(1, len('Enter user to kick: ')+1, 20)
+					#self.clients.remove(client_to_kick)
+					if not client_to_kick in self.clients:
+						win.addstr(1,1,'User does not exist!')
+						time.sleep(1)
+						self.list_clients()
+		except:
+			print(traceback.format_exc())
+			#curses.endwin()
 
 	def list_rooms(self, sock_obj):
 		rooms = []
@@ -168,6 +194,7 @@ class ChatServer(object):
 
 	def draw_menu(self):
 		self.screen = curses.initscr()
+		curses.noecho()
 		self.screen.keypad(1)
 		scr_size = self.screen.getmaxyx()
 		self.screen.clear()
@@ -185,21 +212,19 @@ class ChatServer(object):
 				if x == ord('1'):
 					self.start(self.port)
 					self.screen.addstr(10, 4, "Server started on port %s" % self.port)
+					self.screen.addstr(11, 4, "")
 					self.screen.refresh()
 				elif x == ord('2'):
-					#Place holder to draw clients
 					self.list_clients()
-					pass
 				elif x == ord('3'):
 					#Place holder to draw chat rooms
 					#self.list_rooms()
 					pass
 				elif x == ord('4'):
 					curses.endwin()
-					sys.exit()
 		except:
 			print(traceback.format_exc())
-			#curses.endwin()
+			curses.endwin()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()

@@ -1,20 +1,19 @@
 import struct, binascii
 
-header_len = 8
+header_len = 16
 
 def raw_recv(sock_obj):
 	header = sock_obj.recv(header_len)
-	msg_type = header[:4]
-	msg_len = header[4::]
-	try:
-		msg = sock_obj.recv(msg_len)
-		return msg_type, msg
-	except MemoryError:
-		return 'error'
+	msg_type, msg_len = unpacker(header)
+	return msg_type, msg_len
+
+def recv_msg(msg_len, sock_obj):
+	msg = sock_obj.recv(msg_len*2)
+	return binascii.unhexlify(msg)
 
 def raw_send(msg, msg_type, sock_obj):
 	msg_to_send = packer(msg_type, msg)
-	sock_obj.send(msg_to_send)	
+	sock_obj.send(msg_to_send)
 
 def packer(msg_type, message):
 	pack = struct.Struct('>ii')
@@ -25,8 +24,5 @@ def packer(msg_type, message):
 def unpacker(data):
 	pack = struct.Struct('>ii')
 	packed_data = binascii.unhexlify(data)
-	header = pack.unpack(packed_data[:8])
-	msg_type = header[0]
-	msg_len = header[1]
-	msg = packed_data[8:8+msg_len]
-	return (msg_type, msg)
+	header = pack.unpack(packed_data)
+	return header

@@ -7,7 +7,7 @@ class ChatClient(object):
 		#Create master socket
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.inputs = [self.sock, sys.stdin] #Inputs to read from	
+		self.inputs = [self.sock, sys.stdin] #Inputs to read from
 
 		#Create SSL wrapper for socket
 		self.ssl_key = "../ssl_key"
@@ -23,8 +23,6 @@ class ChatClient(object):
 		self.command = 5
 		self.server = 6
 
-		self.username = ''
-
 		self.msg_queue = []
 
 	def listener(self):
@@ -32,10 +30,13 @@ class ChatClient(object):
 			read, write, err = select.select(self.inputs, [], [])
 			for socket in read:
 				if self.sock in read:
-					msg_type, msg = messages.raw_recv(socket)
+					msg_type, msg_len = messages.unpacker(socket)
+					msg = messages.recv_msg(msg_len, socket)
+					self.msg_handler(msg_type, msg, socket)
 
 	def paint_window(self):
 		screen = curses.initscr()
+		screen.clear()
 		screen.border(1)
 		scr_size = screen.getmaxyx()
 		return screen, scr_size
@@ -51,7 +52,7 @@ class ChatClient(object):
 		if x == ord('y'):
 			self.join_room()
 		else:
-			self.chat_window()		
+			self.chat_window()
 
 	def join_room(self):
 		screen, scr_size = self.paint_window()
@@ -61,17 +62,8 @@ class ChatClient(object):
 		tbox.addstr(1,1, 'Room name: ')
 		screen.refresh()
 		tbox.refresh()
-		room_name = tbox.getstr(1, len('Please enter name of chat you wish to join: ')+1, 20)
+		room_name = tbox.getstr(1, len('Room name: ')+1, 20)
 		messages.raw_send(room_name, self.join, self.sock)
-
-	def start_room(self):
-		print 'Create a new chat room'
-		room_name = raw_input('Please enter room name: ')
-		choice = raw_input('Do you want to protect the room with a password? y/n: ')
-		if choice.lower() == 'y':
-			password = raw_input('Please enter a password: ')
-			pass_hash = hashlib.sha224(password).hexdigest() #Create secure password for chat room
-			self.sock.send()
 
 	def select_username(self):
 		screen = curses.initscr()
@@ -84,7 +76,15 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		self.username = tbox.getstr(1, len('Username: ')+1, 20)
-		messages.raw_send(self.username, self.user, self.sock)
+		screen.clear()
+
+		screen.addstr(2, 2, "Please enter a password below (Max len 15 chars)")
+		tbox.addstr(1,1, 'Password: ')
+		curses.noecho()
+		self.password = tbox.getstr(1, len('Password: ')+1, 20)
+		self.password = hashlib.sha224(self.password).hexdigest()
+		#messages.raw_send(self.username, self.user, self.sock)
+		curses.endwin()
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
@@ -104,7 +104,7 @@ class ChatClient(object):
 			pass
 		else:
 			pass
-		
+
 	def get_server_ip(self):
 		try:
 			screen = curses.initscr()
@@ -148,8 +148,8 @@ class ChatClient(object):
 			self.sock.connect((str(ip), int(port))) #Connect to server on specified port
 		except socket.error:
 			print(traceback.format_exc())
-	
-	def chat_window():
+
+	def chat_window(self):
 		try:
 			#Counters used to guage where to insert new lines into boxes
 			ctr = 2
@@ -195,14 +195,20 @@ class ChatClient(object):
 				win3.refresh()
 
 				'''Perhaps look to have a queue here so that we receive a self.normal message, we add it to the list and when itering thru the while loop we check to see if there are any messages to print to the screen?'''
-		
+
 		except:
 			curses.endwin()
+
+	def test_command(self):
+		self.sock.sendall('test')
+		self.screen.addstr(15, 4, "Sent data to server")
+		self.screen.refresh()
 
 	def draw_menu(self):
 		'''This draws the main menu'''
 
 		self.screen = curses.initscr()
+		#curses.noecho()
 		self.screen.keypad(1)
 		self.screen.border(1)
 		self.scr_size = self.screen.getmaxyx()
@@ -214,7 +220,7 @@ class ChatClient(object):
 		self.screen.addstr(8, 4, "[3] Start new private chat")
 		self.screen.addstr(9, 4, "[4] List chat rooms")
 		self.screen.addstr(10, 4, "[5] List connected users")
-		self.screen.addstr(11, 4, "[6] Enter username")
+		self.screen.addstr(11, 4, "[6] Test command")
 		self.screen.addstr(12, 4, "[7] Exit")
 		self.screen.refresh()
 		try:
@@ -225,11 +231,12 @@ class ChatClient(object):
 					self.get_server_ip()
 					self.get_server_port()
 					self.server_connect(self.server_ip, self.server_port)
-					self.draw_menu()
+					messages.raw_send(self.username, self.user, self.sock)f
 					self.screen.addstr(15, 4, "Connected to server!")
+					self.draw_menu()
 					self.screen.refresh()
 				elif x == ord('2'):
-					#self.start_chat()
+					self.start_chat()
 					pass
 				elif x == ord('3'):
 					#self.list_rooms()
@@ -241,15 +248,15 @@ class ChatClient(object):
 					#self.list_rooms()
 					pass
 				elif x == ord('6'):
-					self.username = self.select_username()
-					self.draw_menu()
+					self.test_command()
 				elif x == ord('7'):
 					curses.endwin()
 					sys.exit()
-		except:
+		except KeyboardInterrupt:
 			#curses.endwin()
 			print(traceback.format_exc())
 
 if __name__ == '__main__':
 	client = ChatClient()
+	client.select_username()
 	client.draw_menu()
