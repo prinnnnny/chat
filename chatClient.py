@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import socket, sys, ssl, hashlib, os, curses, readline, traceback, messages
+from logger import Logger
 
 class ChatClient(object):
 	def __init__(self):
@@ -76,6 +77,7 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		self.username = tbox.getstr(1, len('Username: ')+1, 20)
+		tbox.clear()
 		screen.clear()
 
 		screen.addstr(2, 2, "Please enter a password below (Max len 15 chars)")
@@ -83,6 +85,8 @@ class ChatClient(object):
 		curses.noecho()
 		self.password = tbox.getstr(1, len('Password: ')+1, 20)
 		self.password = hashlib.sha224(self.password).hexdigest()
+		self.creds = self.username + ':' + self.password
+		curses.echo()
 		#messages.raw_send(self.username, self.user, self.sock)
 		curses.endwin()
 
@@ -150,6 +154,7 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 	def chat_window(self):
+		username = 'test'
 		try:
 			#Counters used to guage where to insert new lines into boxes
 			ctr = 2
@@ -163,7 +168,7 @@ class ChatClient(object):
 			win2 = curses.newwin(scr_size[0]-10, 10000 - scr_size[1]/5, 0, scr_size[1]/5)
 			win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
 
-			#User box, top left
+			#User box
 			win.box()
 			win.addstr(user_ctr,1,'Users', curses.A_BOLD)
 			user_ctr += 1
@@ -173,7 +178,7 @@ class ChatClient(object):
 			win2.box()
 			win2.addstr(1,1,'Chat', curses.A_BOLD)
 
-			#Actual input window
+			#Input window
 			win3.box()
 			win3.addstr(1,1,username)
 
@@ -184,7 +189,7 @@ class ChatClient(object):
 			win3.refresh()
 			while True:
 				text = win3.getstr(1,len(username)+1,500)
-				self.send_msg(self.construct_msg(self.normal, text))
+				messages.raw_send(text, self.normal, self.sock)
 				win2.addstr(1,1,'Chat', curses.A_BOLD)
 				win2.addstr(ctr,1,(username + text))
 				ctr += 1
@@ -195,14 +200,9 @@ class ChatClient(object):
 				win3.refresh()
 
 				'''Perhaps look to have a queue here so that we receive a self.normal message, we add it to the list and when itering thru the while loop we check to see if there are any messages to print to the screen?'''
-
 		except:
-			curses.endwin()
-
-	def test_command(self):
-		self.sock.sendall('test')
-		self.screen.addstr(15, 4, "Sent data to server")
-		self.screen.refresh()
+			print(traceback.format_exc())
+			#curses.endwin()
 
 	def draw_menu(self):
 		'''This draws the main menu'''
@@ -220,24 +220,24 @@ class ChatClient(object):
 		self.screen.addstr(8, 4, "[3] Start new private chat")
 		self.screen.addstr(9, 4, "[4] List chat rooms")
 		self.screen.addstr(10, 4, "[5] List connected users")
-		self.screen.addstr(11, 4, "[6] Test command")
-		self.screen.addstr(12, 4, "[7] Exit")
+		self.screen.addstr(11, 4, "[6] Exit")
 		self.screen.refresh()
 		try:
 			x = 0
-			while x != ord('7'):
+			while x != ord('6'):
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
 					self.get_server_ip()
 					self.get_server_port()
 					self.server_connect(self.server_ip, self.server_port)
-					messages.raw_send(self.username, self.user, self.sock)f
+
+					messages.raw_send(self.creds, self.user, self.sock)
+
 					self.screen.addstr(15, 4, "Connected to server!")
 					self.draw_menu()
 					self.screen.refresh()
 				elif x == ord('2'):
 					self.start_chat()
-					pass
 				elif x == ord('3'):
 					#self.list_rooms()
 					pass
@@ -248,12 +248,10 @@ class ChatClient(object):
 					#self.list_rooms()
 					pass
 				elif x == ord('6'):
-					self.test_command()
-				elif x == ord('7'):
 					curses.endwin()
 					sys.exit()
 		except KeyboardInterrupt:
-			#curses.endwin()
+			curses.endwin()
 			print(traceback.format_exc())
 
 if __name__ == '__main__':
