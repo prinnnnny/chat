@@ -51,6 +51,7 @@ class ChatServer(object):
 			self.screen.refresh()
 
 	def listener(self):
+		logger = Logger()
 		while True:
 			read, write, err = select.select(self.inputs, [], [])
 			for s in read:
@@ -59,11 +60,15 @@ class ChatServer(object):
 					self.screen.refresh()
 					self.clients.append(address)
 					self.inputs.append(client)
-					#Create a new dict key/value pair for the socket and the hostname and room name
-					self.client_dict[client] = ['Anon', 'default', None]
+
+					#Create a new dict key/value pair placeholder for the socket, username, room name and password
+					self.client_dict[client] = [None, 'default', None, address[0], address[1]]
+
 					#Append the socket to the room so we can later send them messages in self.broadcast
 					self.chat_rooms['default'].append(client)
 					self.screen.addstr(self.win_pointer, 4, "Client connected from %s" % str(address))
+
+					#Update screen
 					self.win_pointer +=1
 					self.screen.addstr(self.win_pointer, 4, "")
 					self.screen.refresh()
@@ -72,21 +77,25 @@ class ChatServer(object):
 					try:
 						msg_type, msg_len = messages.raw_recv(s)
 						msg = messages.recv_msg(msg_len, s)
-						self.screen.addstr(self.win_pointer, 4, "Msg received")
+
+						self.screen.addstr(self.win_pointer, 4, "Msg received from %s" % self.client_dict[s][0])
 						self.msg_handler(msg_type, msg, s)
+
 						self.win_pointer += 1
 						self.screen.refresh()
 					except:
 						pass
+					logger.log_server_message(msg_type, self.client_dict[s][0], self.client_dict[s][3], self.client_dict[s][4], msg)
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
+			msg = str(self.client_dict[sock_obj][0] + ': ' + msg)
 			self.broadcast_msg(msg, sock_obj)
 		elif msg_type == self.join:
 			self.join_new_room(msg, sock_obj)
 		elif msg_type == self.user:
 			self.add_user(msg, sock_obj)
-			self.screen.addstr(self.win_pointer, 4, "Client connected and updated with username and password")
+			self.screen.addstr(self.win_pointer, 4, "Updated %s with new password" % msg.split(':')[0])
 			self.win_pointer += 1
 			self.screen.refresh()
 		elif msg_type == self.password:
@@ -106,9 +115,7 @@ class ChatServer(object):
 
 	def broadcast_msg(self, msg, sock_obj):
 		room = self.client_dict[sock_obj][1] #Get room from client dict
-		print room
-		for client in self.chat_rooms[room]:
-			print client
+		for client in self.chat_rooms[str(room)]:
 			#if client is sock_obj: #Don't echo the same message back to the client
 			#	pass
 			#else:
@@ -120,6 +127,23 @@ class ChatServer(object):
 		password = pair.split(':')[1]
 		self.client_dict[sock_obj][0] = str(username)
 		self.client_dict[sock_obj][2] = str(password)
+		with open('passwords.txt', 'a') as pass_file:
+			if username in pass_file:
+				pass
+			else:
+				pass_file.write(str(username) + ':' + str(password))
+
+	def login_auth(self, username, password):
+		with open('passwords.txt', 'r') as pass_file:
+			for line in pass_file.readline():
+				if username in line:
+					user = line.split(':')[0]
+					pass1 = line.split(':')[1]
+					if password == pass1:
+						auth = True
+					else:
+						auth = False
+					return auth
 
 	def list_clients(self):
 		users = []

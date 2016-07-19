@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import socket, sys, ssl, hashlib, os, curses, readline, traceback, messages
+import socket, sys, ssl, hashlib, os, curses, readline, traceback, messages, threading, select
 from logger import Logger
 
 class ChatClient(object):
@@ -8,12 +8,13 @@ class ChatClient(object):
 		#Create master socket
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		self.inputs = [self.sock, sys.stdin] #Inputs to read from
 
 		#Create SSL wrapper for socket
 		self.ssl_key = "../ssl_key"
 		self.ssl_cert = "../ssl_cert"
 		self.sock = ssl.wrap_socket(self.sock,server_side=False,certfile=self.ssl_cert,keyfile=self.ssl_key, ssl_version=ssl.PROTOCOL_TLSv1)
+
+		self.inputs = [self.sock]
 
 		#Values to be used for constructing message types
 		self.normal = 0
@@ -26,14 +27,18 @@ class ChatClient(object):
 
 		self.msg_queue = []
 
+		self.listen_thread = threading.Thread(target=self.listener)
+		self.listen_thread.daemon = True
+		#self.msg_listener_thread = threading.Thread(target=self.msg_listener)
+		#self.msg_listener_thread.daemon = True
+
 	def listener(self):
 		while True:
 			read, write, err = select.select(self.inputs, [], [])
-			for socket in read:
-				if self.sock in read:
-					msg_type, msg_len = messages.unpacker(socket)
-					msg = messages.recv_msg(msg_len, socket)
-					self.msg_handler(msg_type, msg, socket)
+			if self.sock in read:
+				msg_type, msg_len = messages.raw_recv(self.sock)
+				msg = messages.recv_msg(msg_len, self.sock)
+				self.msg_handler(msg_type, msg, self.sock)
 
 	def paint_window(self):
 		screen = curses.initscr()
@@ -92,7 +97,6 @@ class ChatClient(object):
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
-			print msg
 			self.msg_queue.append(msg)
 		elif msg_type == self.join:
 			pass
@@ -154,6 +158,7 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 	def chat_window(self):
+		#self.msg_listener_thread.start()
 		username = 'test'
 		try:
 			#Counters used to guage where to insert new lines into boxes
@@ -190,24 +195,25 @@ class ChatClient(object):
 			while True:
 				#Grab text and ship it to messages to send to server
 				text = win3.getstr(1,len(self.username + ': ')+1,500)
-				messages.raw_send(text, self.normal, self.sock)
+				if text == '':
+					pass
+				else:
+					messages.raw_send(text, self.normal, self.sock)
 
 				#Update chat window with new message from local user
-				#win2.addstr(1,1,'Chat', curses.A_BOLD)
-				win2.addstr(ctr,1,(self.username + text))
+				win2.addstr(ctr,1,(self.username + ': ' + text))
 				ctr += 1
+
+				#Check for any new messages received on socket
+				for msg in self.msg_queue:
+					win2.addstr(ctr,1,str(msg))
+					ctr += 1
+					self.msg_queue.remove(msg)
 
 				#Redraw input window
 				win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
 				win3.box()
 				win3.addstr(1,1,self.username + ': ')
-
-				#Check for any new messages received on socket
-				if len(self.msg_queue) > 0:
-					curses.endwin()
-					for msg in self.msg_queue:
-						win2.addstr(ctr,1,str(msg))
-						ctr += 1
 
 				#Refresh all boxes
 				screen.refresh()
@@ -245,6 +251,7 @@ class ChatClient(object):
 					self.get_server_ip()
 					self.get_server_port()
 					self.server_connect(self.server_ip, self.server_port)
+					self.listen_thread.start()
 
 					messages.raw_send(self.creds, self.user, self.sock)
 
