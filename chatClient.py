@@ -29,8 +29,9 @@ class ChatClient(object):
 
 		self.listen_thread = threading.Thread(target=self.listener)
 		self.listen_thread.daemon = True
-		#self.msg_listener_thread = threading.Thread(target=self.msg_listener)
-		#self.msg_listener_thread.daemon = True
+
+		self.message_print_thread = threading.Thread(target=self.message_print)
+		self.message_print_thread.daemon = True
 
 		self.connection_active = False
 
@@ -95,6 +96,9 @@ class ChatClient(object):
 
 		screen.addstr(2, 2, "Please enter a password below (Max len 15 chars)")
 		tbox.addstr(1,1, 'Password: ')
+		tbox.box()
+		screen.refresh()
+		tbox.refresh()
 		curses.noecho()
 		self.password = tbox.getstr(1, len('Password: ')+1, 20)
 		self.password = hashlib.sha224(self.password).hexdigest()
@@ -166,11 +170,10 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 	def chat_window(self):
-		#self.msg_listener_thread.start()
 		username = 'test'
 		try:
 			#Counters used to guage where to insert new lines into boxes
-			ctr = 2
+			self.ctr = 2
 			user_ctr = 1
 
 			screen = curses.initscr() #Init screen
@@ -189,34 +192,41 @@ class ChatClient(object):
 
 			#Main chat window
 			self.win2.box()
-			self.win2.addstr(1,1,'Room: %s' % self.chat_room, curses.A_BOLD)
+			self.win2.addstr(1,1,'Room: ', curses.A_BOLD)
 
 			#Input window
 			self.win3.box()
 			self.win3.addstr(1,1,self.username + ': ')
+			self.win3.timeout(0)
 
 			#Refresh screen with updated changes
 			screen.refresh()
 			self.win.refresh()
 			self.win2.refresh()
 			self.win3.refresh()
+
+			self.message_print_thread.start()
+
 			while True:
-				#Grab text and ship it to messages to send to server
-				text = self.win3.getstr(1,len(self.username + ': ')+1,500)
-				if text == '':
-					pass
-				else:
-					messages.raw_send(text, self.normal, self.sock)
+			#	#Grab text and ship it to messages to send to server
+			#	text = self.win3.getstr(1,len(self.username + ': ')+1,500)
+			#	self.msg_queue.append(self.username + ': ' + text)
+			#	if text == '':
+			#		pass
+			#	else:
+			#		messages.raw_send(text, self.normal, self.sock)
 
 				#Update chat window with new message from local user
-				self.win2.addstr(ctr,1,(self.username + ': ' + text))
-				ctr += 1
+				#self.win2.addstr(self.ctr,1,(self.username + ': ' + text))
+				#elf.ctr += 1
 
 				#Check for any new messages received on socket
-				for msg in self.msg_queue:
-					self.win2.addstr(ctr,1,str(msg))
-					ctr += 1
-					self.msg_queue.remove(msg)
+				if len(self.msg_queue) > 0:
+					for msg in self.msg_queue:
+						self.win2.addstr(self.ctr,1,str(msg))
+						self.ctr += 1
+						self.msg_queue.remove(msg)
+						self.win2.refresh()
 
 				#Redraw input window
 				self.win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
@@ -232,6 +242,23 @@ class ChatClient(object):
 		except:
 			print(traceback.format_exc())
 			#curses.endwin()
+
+	def message_print(self):
+		while True:
+			#Grab text and ship it to messages to send to server
+			text = self.win3.getstr(1,len(self.username + ': ')+1,500)
+			if text == '':
+				pass
+			#self.msg_queue.append(self.username + ': ' + text)
+			messages.raw_send(text, self.normal, self.sock)
+			self.win2.addstr(self.ctr,1,(self.username + ': ' + text))
+			self.ctr += 1
+			#self.win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
+			#self.win3.box()
+			#self.win3.addstr(1,1,self.username + ': ')
+
+			self.win2.refresh()
+			self.win3.refresh()
 
 	def draw_menu(self):
 		'''This draws the main menu'''
@@ -260,18 +287,21 @@ class ChatClient(object):
 			while x != ord('6'):
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
-					self.get_server_ip()
-					self.get_server_port()
-					self.server_connect(self.server_ip, self.server_port)
-					self.connection_active = True
-					self.listen_thread.start()
+					if self.connection_active == True:
+						self.screen.addstr(15, 4, "Connection already established to server!")
+					else:
+						self.get_server_ip()
+						self.get_server_port()
+						self.server_connect(self.server_ip, self.server_port)
+						self.connection_active = True
+						self.listen_thread.start()
 
-					#Send server our username and hashed password in format 'username:password'
-					messages.raw_send(self.creds, self.user, self.sock)
+						#Send server our username and hashed password in format 'username:password'
+						messages.raw_send(self.creds, self.user, self.sock)
 
-					self.screen.addstr(15, 4, "Connected to server!")
-					self.draw_menu()
-					self.screen.refresh()
+						self.screen.addstr(15, 4, "Connected to server!")
+						self.draw_menu()
+						self.screen.refresh()
 				elif x == ord('2'):
 					self.start_chat()
 				elif x == ord('3'):

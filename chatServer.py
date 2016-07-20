@@ -100,10 +100,11 @@ class ChatServer(object):
 
 						self.win_pointer += 1
 						self.screen.refresh()
+
+						#Logs type, ip, port, message and time stamp of received message
+						logger.log_server_message(msg_type, self.client_dict[s][0], self.client_dict[s][3], self.client_dict[s][4], msg)
 					except:
 						pass
-					#Logs type, ip, port, message and time stamp of received message
-					logger.log_server_message(msg_type, self.client_dict[s][0], self.client_dict[s][3], self.client_dict[s][4], msg)
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		'''Main message handler. Takes a message type and passes the message and the socket object
@@ -136,7 +137,7 @@ class ChatServer(object):
 			if client is sock_obj: #Don't echo the same message back to the client
 				pass
 			else:
-			messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
+				messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
 
 	def add_user(self, msg, sock_obj):
 		pair = msg
