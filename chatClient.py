@@ -32,6 +32,8 @@ class ChatClient(object):
 		#self.msg_listener_thread = threading.Thread(target=self.msg_listener)
 		#self.msg_listener_thread.daemon = True
 
+		self.connection_active = False
+
 	def listener(self):
 		while True:
 			read, write, err = select.select(self.inputs, [], [])
@@ -57,8 +59,11 @@ class ChatClient(object):
 		x = screen.getch()
 		if x == ord('y'):
 			self.join_room()
-		else:
+		elif x == ord('n'):
 			self.chat_window()
+			self.chat_room = 'default'
+		else:
+			self.start_chat()
 
 	def join_room(self):
 		screen, scr_size = self.paint_window()
@@ -69,7 +74,10 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		room_name = tbox.getstr(1, len('Room name: ')+1, 20)
+		self.chat_room = room_name
 		messages.raw_send(room_name, self.join, self.sock)
+		curses.endwin()
+		self.chat_window()
 
 	def select_username(self):
 		screen = curses.initscr()
@@ -169,57 +177,57 @@ class ChatClient(object):
 			screen.keypad(1) #Accept special keys i.e up and down arrows
 			scr_size = screen.getmaxyx() #Get height and width of main screen
 
-			win = curses.newwin(scr_size[0]-10, scr_size[1]/5, 0, 0)
-			win2 = curses.newwin(scr_size[0]-10, 10000 - scr_size[1]/5, 0, scr_size[1]/5)
-			win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
+			self.win = curses.newwin(scr_size[0]-10, scr_size[1]/5, 0, 0)
+			self.win2 = curses.newwin(scr_size[0]-10, 10000 - scr_size[1]/5, 0, scr_size[1]/5)
+			self.win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
 
 			#User box
-			win.box()
-			win.addstr(user_ctr,1,'Users', curses.A_BOLD)
+			self.win.box()
+			self.win.addstr(user_ctr,1,'Users', curses.A_BOLD)
 			user_ctr += 1
-			win.addstr(user_ctr,1,username)
+			self.win.addstr(user_ctr,1,username)
 
 			#Main chat window
-			win2.box()
-			win2.addstr(1,1,'Chat', curses.A_BOLD)
+			self.win2.box()
+			self.win2.addstr(1,1,'Room: %s' % self.chat_room, curses.A_BOLD)
 
 			#Input window
-			win3.box()
-			win3.addstr(1,1,self.username + ': ')
+			self.win3.box()
+			self.win3.addstr(1,1,self.username + ': ')
 
 			#Refresh screen with updated changes
 			screen.refresh()
-			win.refresh()
-			win2.refresh()
-			win3.refresh()
+			self.win.refresh()
+			self.win2.refresh()
+			self.win3.refresh()
 			while True:
 				#Grab text and ship it to messages to send to server
-				text = win3.getstr(1,len(self.username + ': ')+1,500)
+				text = self.win3.getstr(1,len(self.username + ': ')+1,500)
 				if text == '':
 					pass
 				else:
 					messages.raw_send(text, self.normal, self.sock)
 
 				#Update chat window with new message from local user
-				win2.addstr(ctr,1,(self.username + ': ' + text))
+				self.win2.addstr(ctr,1,(self.username + ': ' + text))
 				ctr += 1
 
 				#Check for any new messages received on socket
 				for msg in self.msg_queue:
-					win2.addstr(ctr,1,str(msg))
+					self.win2.addstr(ctr,1,str(msg))
 					ctr += 1
 					self.msg_queue.remove(msg)
 
 				#Redraw input window
-				win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
-				win3.box()
-				win3.addstr(1,1,self.username + ': ')
+				self.win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
+				self.win3.box()
+				self.win3.addstr(1,1,self.username + ': ')
 
 				#Refresh all boxes
 				screen.refresh()
-				win.refresh()
-				win2.refresh()
-				win3.refresh()
+				self.win.refresh()
+				self.win2.refresh()
+				self.win3.refresh()
 
 		except:
 			print(traceback.format_exc())
@@ -234,14 +242,18 @@ class ChatClient(object):
 		self.screen.border(1)
 		self.scr_size = self.screen.getmaxyx()
 		self.screen.clear()
-		self.screen.addstr(2, 2, "Welcome, %s!" % str(self.username))
-		self.screen.addstr(4, 2, "Please choose an option below")
-		self.screen.addstr(6, 4, "[1] Connect to server")
-		self.screen.addstr(7, 4, "[2] Join chat room")
-		self.screen.addstr(8, 4, "[3] Start new private chat")
-		self.screen.addstr(9, 4, "[4] List chat rooms")
-		self.screen.addstr(10, 4, "[5] List connected users")
-		self.screen.addstr(11, 4, "[6] Exit")
+		if self.connection_active == True:
+			self.screen.addstr(2, 2, "Connected to server!")
+		else:
+			self.screen.addstr(2, 2, "No active connection!")
+		self.screen.addstr(4, 2, "Welcome, %s!" % str(self.username))
+		self.screen.addstr(6, 2, "Please choose an option below")
+		self.screen.addstr(8, 4, "[1] Connect to server")
+		self.screen.addstr(9, 4, "[2] Enter chat room")
+		self.screen.addstr(10, 4, "[3] Start new private chat")
+		self.screen.addstr(11, 4, "[4] List chat rooms")
+		self.screen.addstr(12, 4, "[5] List connected users")
+		self.screen.addstr(13, 4, "[6] Exit")
 		self.screen.refresh()
 		try:
 			x = 0
@@ -251,8 +263,10 @@ class ChatClient(object):
 					self.get_server_ip()
 					self.get_server_port()
 					self.server_connect(self.server_ip, self.server_port)
+					self.connection_active = True
 					self.listen_thread.start()
 
+					#Send server our username and hashed password in format 'username:password'
 					messages.raw_send(self.creds, self.user, self.sock)
 
 					self.screen.addstr(15, 4, "Connected to server!")
