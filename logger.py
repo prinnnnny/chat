@@ -8,3 +8,7 @@ class Logger(object):
     def log_server_message(self, msg_type, username, ip, port, message):
         with open('server_log', 'a') as log:
             log.write(str(msg_type) + '\t' + str(time.ctime()) + '\t' + str(username) + '\t' + str(ip) + '\t' + str(port) + '\t' + str(message) + '\n')
+
+    def log_client_connection(self, ip, port):
+        with open('connection_log', 'a') as log:
+            log.write(str(time.ctime()) + '\t' + str(ip) + '\t' + str(port))

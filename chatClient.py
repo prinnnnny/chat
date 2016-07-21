@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import socket, sys, ssl, hashlib, os, curses, readline, traceback, messages, threading, select
+import argparse, socket, sys, ssl, hashlib, os, curses, readline, traceback, messages, threading, select
 from logger import Logger
 
 class ChatClient(object):
@@ -20,12 +20,14 @@ class ChatClient(object):
 		self.normal = 0
 		self.join = 1
 		self.user = 2
-		self.password = 3
+		self.PASS = 3
 		self.direct = 4
 		self.command = 5
 		self.server = 6
 
 		self.msg_queue = []
+
+		self.username = ''
 
 		self.listen_thread = threading.Thread(target=self.listener)
 		self.listen_thread.daemon = True
@@ -33,6 +35,7 @@ class ChatClient(object):
 		self.message_print_thread = threading.Thread(target=self.message_print)
 		self.message_print_thread.daemon = True
 
+		self.auth = False
 		self.connection_active = False
 
 	def listener(self):
@@ -80,7 +83,30 @@ class ChatClient(object):
 		curses.endwin()
 		self.chat_window()
 
-	def select_username(self):
+	def register(self):
+		screen, scr_size = self.paint_window()
+		screen.clear()
+
+		screen.addstr(2, 2, "Please enter a username below (Max len 10 chars)")
+		tbox = curses.newwin(3,scr_size[1]-4, 4,4)
+		tbox.box()
+		tbox.addstr(1,1, 'Username: ')
+
+		screen.addstr(2, 2, "Please enter a password below (Max len 15 chars)")
+		tbox.addstr(1,1, 'Password: ')
+		tbox.box()
+
+		screen.refresh()
+		tbox.refresh()
+		curses.noecho()
+
+		self.password = tbox.getstr(1, len('Password: ')+1, 20)
+		self.password = hashlib.sha224(self.password).hexdigest()
+
+
+
+
+	def login(self):
 		screen = curses.initscr()
 		scr_size = screen.getmaxyx()
 		screen.clear()
@@ -91,6 +117,7 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		self.username = tbox.getstr(1, len('Username: ')+1, 20)
+		print self.username
 		tbox.clear()
 		screen.clear()
 
@@ -100,12 +127,28 @@ class ChatClient(object):
 		screen.refresh()
 		tbox.refresh()
 		curses.noecho()
+
 		self.password = tbox.getstr(1, len('Password: ')+1, 20)
 		self.password = hashlib.sha224(self.password).hexdigest()
-		self.creds = self.username + ':' + self.password
+
 		curses.echo()
-		#messages.raw_send(self.username, self.user, self.sock)
-		curses.endwin()
+
+		messages.raw_send(self.username, self.user, self.sock)
+		msg_type, msg_len = messages.raw_recv(self.sock)
+		response = messages.recv_msg(msg_len, self.sock)
+		print response
+
+		if response == 'ACK':
+			messages.raw_send(self.password, self.PASS, self.sock)
+			msg_type, msg_len = messages.raw_recv(self.sock)
+			response = messages.recv_msg(msg_len, self.sock)
+			if response == 'ACK':
+				self.auth = True
+			else:
+				self.auth = False
+
+	def send_user_pass(self, username, password):
+
 
 	def msg_handler(self, msg_type, msg, sock_obj):
 		if msg_type == self.normal:
@@ -114,7 +157,7 @@ class ChatClient(object):
 			pass
 		elif msg_type == self.user:
 			pass
-		elif msg_type == self.password:
+		elif msg_type == self.PASS:
 			pass
 		elif msg_type == self.direct:
 			pass
@@ -272,48 +315,58 @@ class ChatClient(object):
 		if self.connection_active == True:
 			self.screen.addstr(2, 2, "Connected to server!")
 		else:
-			self.screen.addstr(2, 2, "No active connection!")
-		self.screen.addstr(4, 2, "Welcome, %s!" % str(self.username))
-		self.screen.addstr(6, 2, "Please choose an option below")
-		self.screen.addstr(8, 4, "[1] Connect to server")
-		self.screen.addstr(9, 4, "[2] Enter chat room")
-		self.screen.addstr(10, 4, "[3] Start new private chat")
-		self.screen.addstr(11, 4, "[4] List chat rooms")
-		self.screen.addstr(12, 4, "[5] List connected users")
-		self.screen.addstr(13, 4, "[6] Exit")
+			self.screen.addstr(2, 2, "Not connected to server!")
+		if self.auth == True:
+			self.screen.addstr(4, 2, "Logged in!")
+		else:
+			self.screen.addstr(4, 2, "Not logged in!")
+
+		self.screen.addstr(6, 2, "Welcome, %s!" % str(self.username))
+		self.screen.addstr(8, 2, "Please choose an option below")
+		self.screen.addstr(9, 4, "[1] Login to server")
+		self.screen.addstr(10, 4, "[2] Register new user")
+		self.screen.addstr(11, 4, "[3] Enter chat room")
+		self.screen.addstr(12, 4, "[4] Start new private chat")
+		self.screen.addstr(13, 4, "[5] List chat rooms")
+		self.screen.addstr(14, 4, "[6] List connected users")
+		self.screen.addstr(15, 4, "[7] Exit")
 		self.screen.refresh()
 		try:
 			x = 0
-			while x != ord('6'):
+			while x != ord('7'):
 				x = self.screen.getch() #Get key press
 				if x == ord('1'):
 					if self.connection_active == True:
 						self.screen.addstr(15, 4, "Connection already established to server!")
 					else:
-						self.get_server_ip()
-						self.get_server_port()
+						if args.host and args.port:
+							self.server_ip = args.host
+							self.server_port = args.port
+						else:
+							self.get_server_ip()
+							self.get_server_port()
 						self.server_connect(self.server_ip, self.server_port)
+						self.login()
 						self.connection_active = True
 						self.listen_thread.start()
-
-						#Send server our username and hashed password in format 'username:password'
-						messages.raw_send(self.creds, self.user, self.sock)
 
 						self.screen.addstr(15, 4, "Connected to server!")
 						self.draw_menu()
 						self.screen.refresh()
 				elif x == ord('2'):
-					self.start_chat()
+					self.register()
 				elif x == ord('3'):
-					#self.list_rooms()
-					pass
+					self.start_chat()
 				elif x == ord('4'):
-					#self.list_users()
+					#self.list_rooms()
 					pass
 				elif x == ord('5'):
-					#self.list_rooms()
+					#self.list_users()
 					pass
 				elif x == ord('6'):
+					#self.list_rooms()
+					pass
+				elif x == ord('7'):
 					curses.endwin()
 					sys.exit()
 		except KeyboardInterrupt:
@@ -321,6 +374,15 @@ class ChatClient(object):
 			print(traceback.format_exc())
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	#Here we specify the port number we are going to be listening on
+	parser.add_argument('-p', '--port', help='Specify port to connect', action='store', dest='port', required=False)
+	parser.add_argument('-t', '--host', help='Specify host IP', action='store', dest='host', required=False)
+	args = parser.parse_args()
+	try:
+		socket.inet_aton(args.host)
+	except socket.error:
+		print 'Please enter a valid IP address'
+		sys.exit(0)
 	client = ChatClient()
-	client.select_username()
 	client.draw_menu()

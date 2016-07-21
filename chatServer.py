@@ -21,7 +21,7 @@ class ChatServer(object):
 		self.normal = 0
 		self.join = 1
 		self.user = 2
-		self.password = 3
+		self.PASS = 3
 		self.direct = 4
 		self.command = 5
 		self.server = 6
@@ -68,10 +68,12 @@ class ChatServer(object):
 				if s is self.sock:
 					#Accept new client
 					client, address = s.accept()
-					self.screen.refresh()
 
 					self.clients.append(address)
 					self.inputs.append(client)
+
+					#Log connection request
+					logger.log_client_connection(address[0], address[1])
 
 					#Create a new dict key/value pair placeholder for the socket, username, room name and password
 					self.client_dict[client] = [None, 'default', None, address[0], address[1]]
@@ -109,7 +111,6 @@ class ChatServer(object):
 	def msg_handler(self, msg_type, msg, sock_obj):
 		'''Main message handler. Takes a message type and passes the message and the socket object
 		to the correct function to handle that message type'''
-
 		if msg_type == self.normal:
 			#Prepend username to message and broadcast it out to all client
 			msg = str(self.client_dict[sock_obj][0] + ': ' + msg)
@@ -117,17 +118,25 @@ class ChatServer(object):
 		elif msg_type == self.join:
 			self.join_new_room(msg, sock_obj)
 		elif msg_type == self.user:
-			#Add user to users file with password (to be used for auth)
-			self.add_user(msg, sock_obj)
-			self.screen.addstr(self.win_pointer, 4, "Updated %s with new password" % msg.split(':')[0])
-			self.win_pointer += 1
-			self.screen.refresh()
-		elif msg_type == self.password:
+			username = msg
+			messages.raw_send('ACK', self.user, sock_obj)
+			msg_type, msg_len = messages.raw_recv(sock_obj)
+			password = messages.recv_msg(msg_len, sock_obj)
+			with open('passwords.txt', 'r') as pass_file:
+				for line in pass_file.readlines():
+					if username in line:
+						if password == line.split(':')[1].strip():
+							messages.raw_send('ACK', self.user, sock_obj)
+						else:
+							messages.raw_send('FAIL', self.user, sock_obj)
+
+		elif msg_type == self.PASS:
 			pass
 		elif msg_type == self.direct:
 			pass
 		elif msg_type == self.command:
-			pass
+			if hasattr(self, msg):
+				getattr(self, msg)(sock_obj)
 		elif msg_type == self.server:
 			pass
 
@@ -162,7 +171,7 @@ class ChatServer(object):
 						auth_success = False
 					return auth
 
-	def list_clients(self):
+	def display_clients(self):
 		'''Displays all active clients on the server side'''
 		users = []
 		try:
@@ -205,7 +214,7 @@ class ChatServer(object):
 			print(traceback.format_exc())
 			curses.endwin()
 
-	def list_chat_rooms(self):
+	def display_chat_rooms(self):
 		rooms = []
 		try:
 			screen = curses.initscr()
@@ -217,7 +226,6 @@ class ChatServer(object):
 				pos = 6
 				screen.addstr(2, 2, "Rooms:")
 
-				#Grab username from client dict
 				for room in self.chat_rooms:
 					screen.addstr(pos, 6, room)
 					pos += 1
@@ -236,7 +244,7 @@ class ChatServer(object):
 		rooms = []
 		for room in self.chat_rooms:
 			rooms.append(room)
-		return rooms
+		messages.raw_send(rooms, self.command, sock_obj)
 
 	def list_users(self, sock_obj):
 		'''Returns a list of users to the client'''
@@ -244,7 +252,7 @@ class ChatServer(object):
 		chat_room = self.client_dict[sock_obj][1]
 		for client in chat_room:
 			clients.append(client)
-		return clients
+		messages.raw_send(clients, self.command, sock_obj)
 
 	def join_new_room(self, msg, sock_obj):
 		'''Takes a room name and either creates a room based on the name or
@@ -282,13 +290,13 @@ class ChatServer(object):
 					self.start(self.port)
 					self.draw_menu()
 				elif x == ord('2'):
-					self.list_clients()
+					self.display_clients()
 				elif x == ord('3'):
-					self.list_chat_rooms()
+					self.display_chat_rooms()
 					pass
 				elif x == ord('4'):
 					curses.endwin()
-		except:
+		except KeyboardInterrupt:
 			print(traceback.format_exc())
 			curses.endwin()
 
