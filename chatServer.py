@@ -61,8 +61,10 @@ class ChatServer(object):
 			self.screen.refresh()
 
 	def listener(self):
+		#Create new logger object
 		logger = Logger()
 		while True:
+			#Loop through each socket, either the main server socket or client sockets
 			read, write, err = select.select(self.inputs, [], [])
 			for s in read:
 				if s is self.sock:
@@ -75,8 +77,8 @@ class ChatServer(object):
 					#Log connection request
 					logger.log_client_connection(address[0], address[1])
 
-					#Create a new dict key/value pair placeholder for the socket, username, room name and password
-					self.client_dict[client] = [None, 'default', None, address[0], address[1]]
+					#Create a new dict entry for client socket, username, chat room, password, ip, port and auth status
+					self.client_dict[client] = [None, 'default', None, address[0], address[1], False]
 
 					#Append the socket to the room so we can later send them messages in self.broadcast
 					self.chat_rooms['default'].append(client)
@@ -111,36 +113,54 @@ class ChatServer(object):
 	def msg_handler(self, msg_type, msg, sock_obj):
 		'''Main message handler. Takes a message type and passes the message and the socket object
 		to the correct function to handle that message type'''
+
 		if msg_type == self.normal:
-			#Prepend username to message and broadcast it out to all client
-			msg = str(self.client_dict[sock_obj][0] + ': ' + msg)
+			#Prepend username to message and broadcast it out to all clients in chat room
+			msg = str(self.client_dict[sock_obj][0]) + ': ' + msg
 			self.broadcast_msg(msg, sock_obj)
+
 		elif msg_type == self.join:
 			self.join_new_room(msg, sock_obj)
+
 		elif msg_type == self.user:
 			username = msg
+			self.client_dict[sock_obj][0] = username
+			print username
 			messages.raw_send('ACK', self.user, sock_obj)
 			msg_type, msg_len = messages.raw_recv(sock_obj)
 			password = messages.recv_msg(msg_len, sock_obj)
+			print password
 			with open('passwords.txt', 'r') as pass_file:
+				user_exists = False
 				for line in pass_file.readlines():
-					if username in line:
+					if username == line.split(':')[0]:
+						user_exists = True
 						if password == line.split(':')[1].strip():
 							messages.raw_send('ACK', self.user, sock_obj)
+							self.client_dict[sock_obj][5] = True
+							print 'ACK'
+							break
 						else:
 							messages.raw_send('FAIL', self.user, sock_obj)
+							print 'Fail'
+							break
+				if user_exists == False:
+					self.add_user(username, password, sock_obj)
+					messages.raw_send('REGISTERED', self.user, sock_obj)
+					print 'REGISTERED'
 
 		elif msg_type == self.PASS:
 			pass
+
 		elif msg_type == self.direct:
 			pass
-		elif msg_type == self.command:
-			if hasattr(self, msg):
-				getattr(self, msg)(sock_obj)
+
 		elif msg_type == self.server:
-			pass
+			if msg == 'list_clients':
+				list_users(sock_obj)
 
 	def broadcast_msg(self, msg, sock_obj):
+		'''Takes a message and sends it to every client that is a member of the same chat room'''
 		room = self.client_dict[sock_obj][1] #Get room from client dict
 		for client in self.chat_rooms[str(room)]:
 			if client is sock_obj: #Don't echo the same message back to the client
@@ -148,28 +168,12 @@ class ChatServer(object):
 			else:
 				messages.raw_send(msg, self.normal, client) #Broadcast the msg to every client in the room
 
-	def add_user(self, msg, sock_obj):
-		pair = msg
-		username = pair.split(':')[0]
-		password = pair.split(':')[1]
+	def add_user(self, username, password, sock_obj):
 		self.client_dict[sock_obj][0] = str(username)
 		self.client_dict[sock_obj][2] = str(password)
 		with open('passwords.txt', 'a') as pass_file:
-			if username in pass_file:
-				pass
-			else:
-				pass_file.write(str(username) + ':' + str(password))
-
-	def login_auth(self, username, raw_password):
-		with open('passwords.txt', 'r') as pass_file:
-			for line in pass_file.readline():
-				if username in line:
-					stored_pass = line.split(':')[1]
-					if raw_password == stored_pass:
-						auth_success = True
-					else:
-						auth_success = False
-					return auth
+			#Append username and password to text file for reading when authing
+			pass_file.write(str(username) + ':' + str(password) + '\n')
 
 	def display_clients(self):
 		'''Displays all active clients on the server side'''
@@ -215,6 +219,7 @@ class ChatServer(object):
 			curses.endwin()
 
 	def display_chat_rooms(self):
+		'''Displays all the chat rooms that are active'''
 		rooms = []
 		try:
 			screen = curses.initscr()
@@ -259,13 +264,15 @@ class ChatServer(object):
 		adds the client to the existing room'''
 		room_to_join = msg
 		if room_to_join not in self.chat_rooms:
-			self.chat_rooms[room_to_join] = [] #Create new key in chat rooms and append client socket to list
+			#Create new key in chat rooms and append client socket to list
+			self.chat_rooms[room_to_join] = []
 			self.self.chat_rooms[room_to_join].append(sock_obj)
 		else:
 			self.client_dict[sock_obj][1] = room_to_join
 			self.chat_rooms[room_to_join].append(sock_obj)
 
 	def draw_menu(self):
+		'''This draws the main menu and wiats for key presses, same as the client side'''
 		self.screen = curses.initscr()
 		curses.noecho() #Remove echoing of the password to screen
 		self.screen.keypad(1)
@@ -285,7 +292,8 @@ class ChatServer(object):
 		try:
 			x = 0
 			while x != ord('4'):
-				x = self.screen.getch() #Get key press
+				#Get key press
+				x = self.screen.getch()
 				if x == ord('1'):
 					self.start(self.port)
 					self.draw_menu()
