@@ -250,6 +250,8 @@ class ChatClient(object):
 			#Main chat window
 			self.win2.box()
 			self.win2.addstr(1,1,'Room: ', curses.A_BOLD)
+			screen.scrollok(1)
+			screen.idlok(1)
 
 			#Input window
 			self.win3.box()
@@ -284,7 +286,6 @@ class ChatClient(object):
 						self.win2.addstr(self.ctr,1,str(msg))
 						self.ctr += 1
 						self.msg_queue.remove(msg)
-						self.win2.refresh()
 
 				#Redraw input window
 				self.win3 = curses.newwin(10, scr_size[1], scr_size[0]-(10), 0)
@@ -297,7 +298,7 @@ class ChatClient(object):
 				self.win2.refresh()
 				self.win3.refresh()
 
-		except:
+		except curses.error:
 			print(traceback.format_exc())
 			#curses.endwin()
 
@@ -314,8 +315,8 @@ class ChatClient(object):
 			#self.win3.box()
 			#self.win3.addstr(1,1,self.username + ': ')
 
-			self.win2.refresh()
-			self.win3.refresh()
+			#self.win2.refresh()
+			#self.win3.refresh()
 
 	def draw_menu(self):
 		'''This draws the main menu and takes key presses as input'''
